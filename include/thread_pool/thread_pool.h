@@ -51,7 +51,19 @@ class threadpool
   template <typename Func, typename... Args>
   auto submit(Func &&f, Args &&...args) -> std::future<return_type<Func, Args...>>
   {
-    // TODO
+    if (stop_) throw std::runtime_error("error: submit on stopped threadpool");
+    using ret_type = return_type<Func, Args...>;
+    // 将f包装成task, task是一个packaged_task的指针
+    auto task =
+      std::make_shared<std::packaged_task<ret_type()>>(std::bind(std::forward<Func>(f), std::forward<Args>(args)...));
+    std::future<ret_type> ret = task->get_future();
+
+    {
+      std::lock_guard<std::mutex> locker(mtx_);
+      task_queue_.emplace([task] { (*task)(); });
+    }
+    cv_.notify_one();  // 通知worker;
+    return ret;
   }
 
  private:
@@ -77,7 +89,7 @@ class threadpool
 
  private:
   std::vector<std::thread> workers_;  // 工作线程(线程池)
-  std::queue<task_t> task_;           // 任务队列
+  std::queue<task_t> task_queue_;     // 任务队列
   // 线程安全控制
   std::condition_variable cv_;     // 任务队列条件变量
   std::mutex mtx_;                 // 互斥对象
