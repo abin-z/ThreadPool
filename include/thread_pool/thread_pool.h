@@ -4,7 +4,7 @@
  * @version: v0.9.0
  * @description:
  * - Features :
- *   - Lightweight & Easy-to-Use: A header-only INI parser with no external dependencies (C++11 only).
+ *   - Lightweight & Easy-to-Use: A C++11 thread pool with task submission and future-based return value support.
  *
  * @author: abin
  * @date: 2025-04-20
@@ -34,8 +34,8 @@ class threadpool
 {
   using task_t = std::function<void()>;
   // 获取可调用对象返回值类型
-  template <typename Func, typename... Args>
-  using return_type = decltype(std::declval<Func>()(std::declval<Args>()...));
+  template <typename F, typename... Args>
+  using return_type = decltype(std::declval<F>()(std::declval<Args>()...));
 
  public:
   explicit threadpool(std::size_t thread_count = default_thread_count())
@@ -43,19 +43,25 @@ class threadpool
     start(thread_count);  // 创建线程
   }
 
+  /// @brief 析构函数, join 所有工作线程
   ~threadpool()
   {
     stop_ = true;
+    cv_.notify_all();
+    for (std::thread &worker : workers_)
+    {
+      worker.join();
+    }
   }
 
-  template <typename Func, typename... Args>
-  auto submit(Func &&f, Args &&...args) -> std::future<return_type<Func, Args...>>
+  template <typename F, typename... Args>
+  auto submit(F &&f, Args &&...args) -> std::future<return_type<F, Args...>>
   {
     if (stop_) throw std::runtime_error("error: submit on stopped threadpool");
-    using ret_type = return_type<Func, Args...>;
+    using ret_type = return_type<F, Args...>;
     // 将f包装成task, task是一个packaged_task的指针
     auto task =
-      std::make_shared<std::packaged_task<ret_type()>>(std::bind(std::forward<Func>(f), std::forward<Args>(args)...));
+      std::make_shared<std::packaged_task<ret_type()>>(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
     std::future<ret_type> ret = task->get_future();
 
     {
@@ -81,7 +87,15 @@ class threadpool
       workers_.emplace_back([this] {
         while (true)
         {
-          // TODO
+          task_t task;
+          {
+            std::unique_lock<std::mutex> locker(mtx_);
+            this->cv_.wait(locker, [this] { return this->stop_ || !this->task_queue_.empty(); });
+            if (this->stop_ && this->task_queue_.empty()) return;
+            task = std::move(task_queue_.front());
+            task_queue_.pop();
+          }
+          task();  // 执行任务
         }
       });
     }
