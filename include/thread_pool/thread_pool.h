@@ -76,6 +76,14 @@ class threadpool
     cv_.notify_one();  // 通知一个等待中的工作线程有新的任务可以执行
     return ret;        // 返回 future 对象
   }
+  
+  // 禁用拷贝构造函数和拷贝赋值操作符
+  threadpool(const threadpool &) = delete;
+  threadpool &operator=(const threadpool &) = delete;
+
+  // 禁用移动构造函数和移动赋值操作符
+  threadpool(threadpool &&) = delete;
+  threadpool &operator=(threadpool &&) = delete;
 
  private:
   /// @brief 默认线程数, 获取硬件支持的并发线程数, 若无法获取则默认为4
