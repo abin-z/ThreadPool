@@ -99,9 +99,9 @@ class threadpool
           {
             std::unique_lock<std::mutex> locker(mtx_);
             // 等待直到任务队列中有任务, 或者线程池已停止
-            this->cv_.wait(locker, [this] { return this->stop_ || !this->task_queue_.empty(); });
-            if (this->stop_ && this->task_queue_.empty()) return;  // 如果线程池已经停止并且队列为空, 退出线程
-            task = std::move(task_queue_.front());                 // 从队列中取出任务
+            cv_.wait(locker, [this] { return stop_ || !task_queue_.empty(); });
+            if (stop_ && task_queue_.empty()) return;  // 如果线程池已经停止并且队列为空, 退出线程
+            task = std::move(task_queue_.front());     // 从队列中取出任务
             task_queue_.pop();
           }
           task();  // 执行任务
@@ -114,7 +114,7 @@ class threadpool
   std::vector<std::thread> workers_;  // 工作线程(线程池)
   std::queue<task_t> task_queue_;     // 任务队列
   std::condition_variable cv_;        // 条件变量, 用于线程同步
-  std::mutex mtx_;                    // 互斥锁, 保护共享资源（任务队列）
+  std::mutex mtx_;                    // 互斥锁, 保护共享资源(任务队列)
   std::atomic<bool> stop_{false};     // 线程池是否停止
 };
 }  // namespace abin
