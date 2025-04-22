@@ -33,9 +33,6 @@ namespace abin
 class threadpool
 {
   using task_t = std::function<void()>;
-  // 获取可调用对象返回值类型
-  template <typename F, typename... Args>
-  using return_type = decltype(std::declval<F>()(std::declval<Args>()...));
 
  public:
   explicit threadpool(std::size_t thread_count = default_thread_count())
@@ -55,14 +52,14 @@ class threadpool
   }
 
   template <typename F, typename... Args>
-  auto submit(F &&f, Args &&...args) -> std::future<return_type<F, Args...>>
+  auto submit(F &&f, Args &&...args) -> std::future<decltype(f(args...))>
   {
     if (stop_) throw std::runtime_error("error: submit on stopped threadpool");
-    using ret_type = return_type<F, Args...>;
+    using return_type = decltype(f(args...));
     // 将f包装成task, task是一个packaged_task的指针
     auto task =
-      std::make_shared<std::packaged_task<ret_type()>>(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
-    std::future<ret_type> ret = task->get_future();
+      std::make_shared<std::packaged_task<return_type()>>(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
+    std::future<return_type> ret = task->get_future();
 
     {
       std::lock_guard<std::mutex> locker(mtx_);
