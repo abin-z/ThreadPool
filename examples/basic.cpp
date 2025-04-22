@@ -9,15 +9,15 @@ double add(double x, double y)
 
 void sayhello()
 {
-  std::cout << "[sayhello] hello world!" << std::endl;
+  std::cout << "[sayhello] hello world!\n";
 }
 
 int main()
 {
-  concurrency::threadpool pool(4);
+  abin::threadpool pool(4);
 
   auto future = pool.submit([] {
-    std::cout << "[lambda] Hello from thread pool!" << std::endl;
+    std::cout << "[lambda] Hello from thread pool!\n";
     return 42;
   });
   auto future2 = pool.submit(add, 1.2, 2.5);

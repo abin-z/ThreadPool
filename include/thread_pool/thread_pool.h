@@ -27,7 +27,7 @@
 #include <thread>
 #include <vector>
 
-namespace concurrency
+namespace abin
 {
 /// @brief C++11的线程池, 提交任务支持任意多参数, 支持获取返回值
 class threadpool
@@ -109,5 +109,5 @@ class threadpool
   std::mutex mtx_;                 // 互斥对象
   std::atomic<bool> stop_{false};  // 线程池是否停止
 };
-}  // namespace concurrency
+}  // namespace abin
 #endif  // CONCURRENCY_THREADPOOL_H
