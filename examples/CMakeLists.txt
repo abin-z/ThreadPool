@@ -1,2 +1,8 @@
-add_executable(basic_use basic.cpp)
-target_link_libraries(basic_use PRIVATE thread_pool)
+add_executable(pool_basic pool_basic.cpp)
+target_link_libraries(pool_basic PRIVATE thread_pool)
+
+add_executable(pool_multiple_tasks pool_multiple_tasks.cpp)
+target_link_libraries(pool_multiple_tasks PRIVATE thread_pool)
+
+add_executable(pool_shutdown pool_shutdown.cpp)
+target_link_libraries(pool_shutdown PRIVATE thread_pool)
