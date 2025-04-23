@@ -33,6 +33,16 @@ namespace abin
 class threadpool
 {
   using task_t = std::function<void()>;  // 定义任务类型为可调用对象
+ public:
+  /// @brief 表示线程池当前状态的结构体
+  struct status
+  {
+    std::size_t total_threads;  ///< 总线程数
+    std::size_t busy_threads;   ///< 正在执行任务的线程数
+    std::size_t idle_threads;   ///< 空闲线程数
+    std::size_t pending_tasks;  ///< 等待中的任务数
+    bool running;               ///< 线程池是否在运行
+  };
 
  public:
   /// @brief 构造函数, 初始化线程池, 创建指定数量的工作线程
@@ -104,6 +114,18 @@ class threadpool
     return !stop_.load();
   }
 
+  /// @brief 获取线程池的当前状态信息
+  status status() const noexcept
+  {
+    std::lock_guard<std::mutex> locker(mtx_);
+    std::size_t total = workers_.size();
+    std::size_t busy = busy_count_.load();
+    std::size_t idle = total - busy;
+    std::size_t pending = task_queue_.size();
+    bool running = !stop_.load();
+    return {total, busy, idle, pending, running};
+  }
+
   // 禁用拷贝构造函数和拷贝赋值操作符
   threadpool(const threadpool &) = delete;
   threadpool &operator=(const threadpool &) = delete;
@@ -147,12 +169,12 @@ class threadpool
   }
 
  private:
-  std::vector<std::thread> workers_;  // 工作线程(线程池)
-  std::queue<task_t> task_queue_;     // 任务队列
-  std::condition_variable cv_;        // 条件变量, 用于线程同步
-  mutable std::mutex mtx_;            // 互斥锁, 保护共享资源(任务队列)
-  std::atomic<bool> stop_{false};     // 线程池是否停止
-  std::atomic<int> busy_count_{0};    // 正在执行任务的线程数量
+  std::vector<std::thread> workers_;        // 工作线程(线程池)
+  std::queue<task_t> task_queue_;           // 任务队列
+  std::condition_variable cv_;              // 条件变量, 用于线程同步
+  mutable std::mutex mtx_;                  // 互斥锁, 保护共享资源(任务队列)
+  std::atomic<bool> stop_{false};           // 线程池是否停止
+  std::atomic<std::size_t> busy_count_{0};  // 正在执行任务的线程数量
 };
 }  // namespace abin
 #endif  // ABIN_THREADPOOL_H
