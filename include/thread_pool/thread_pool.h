@@ -56,7 +56,7 @@ class threadpool
   /// @param thread_count 要创建的线程数量, 默认为硬件支持的并发线程数(若无法获取则为 4)
   explicit threadpool(std::size_t thread_count = default_thread_count())
   {
-    initialize(thread_count);  // 创建线程
+    launch_threads(thread_count);  // 创建线程
   }
 
   /// @brief 析构函数, 停止所有线程并等待它们完成
@@ -83,7 +83,7 @@ class threadpool
     );
     std::future<return_type> ret = task->get_future();  // 获取与 task 相关联的 future
     {
-      std::lock_guard<std::mutex> locker(mtx_);
+      std::lock_guard<std::mutex> lock(mtx_);
       task_queue_.emplace([task] { (*task)(); });  // 将任务添加到任务队列中
     }
     cv_.notify_one();  // 通知一个等待中的工作线程有新的任务可以执行
@@ -95,7 +95,8 @@ class threadpool
   void shutdown(shutdown_mode mode = shutdown_mode::WaitAllTasks)
   {
     {
-      std::lock_guard<std::mutex> locker(mtx_);
+      std::lock_guard<std::mutex> lock(mtx_);
+      if (!running_) return;  // 已经关闭则直接返回
       running_ = false;
       if (mode == shutdown_mode::DiscardTasks)  // 放弃任务模式
       {
@@ -115,12 +116,13 @@ class threadpool
   /// @param thread_count 要创建的工作线程数量
   void reboot(std::size_t thread_count)
   {
-    if (running_)
+    shutdown(shutdown_mode::WaitAllTasks);
     {
-      shutdown(shutdown_mode::WaitAllTasks);
+      std::lock_guard<std::mutex> lock(mtx_);
+      if (running_) return;  // 已重启, 无需再次初始化(幂等)
+      running_ = true;
+      launch_threads(thread_count);
     }
-    running_ = true;
-    initialize(thread_count);
   }
 
   /// @brief 当前线程池的总线程数量
@@ -131,7 +133,7 @@ class threadpool
   /// @brief 获取当前等待的任务数量
   std::size_t pending_tasks() const noexcept
   {
-    std::lock_guard<std::mutex> locker(mtx_);
+    std::lock_guard<std::mutex> lock(mtx_);
     return task_queue_.size();
   }
   /// @brief 获取繁忙的线程数量
@@ -153,7 +155,7 @@ class threadpool
   /// @brief 获取线程池的当前状态信息
   status status() const noexcept
   {
-    std::lock_guard<std::mutex> locker(mtx_);
+    std::lock_guard<std::mutex> lock(mtx_);
     std::size_t total = workers_.size();
     std::size_t busy = busy_count_.load();
     std::size_t idle = total - busy;
@@ -176,10 +178,11 @@ class threadpool
     return n == 0 ? 4 : n;
   }
 
-  /// @brief 初始化线程池, 创建指定数量的工作线程
+  /// @brief 启动线程池, 创建指定数量的工作线程
   /// @param thread_count 线程池中线程的数量
-  void initialize(std::size_t thread_count)
+  void launch_threads(std::size_t thread_count)
   {
+    if (!workers_.empty()) return;  // 已经初始化过
     for (std::size_t i = 0; i < thread_count; ++i)
     {
       // 创建并启动工作线程
@@ -188,9 +191,9 @@ class threadpool
         {
           task_t task;
           {
-            std::unique_lock<std::mutex> locker(mtx_);
+            std::unique_lock<std::mutex> lock(mtx_);
             // 等待直到任务队列中有任务, 或者线程池已停止
-            cv_.wait(locker, [this] { return !running_ || !task_queue_.empty(); });
+            cv_.wait(lock, [this] { return !running_ || !task_queue_.empty(); });
             if (!running_ && task_queue_.empty()) return;  // 如果线程池已经停止并且队列为空, 退出线程
             task = std::move(task_queue_.front());         // 从队列中取出任务
             task_queue_.pop();
