@@ -132,3 +132,106 @@ TEST_CASE("ThreadPool blocks on empty task queue", "[thread_pool]")
 
   REQUIRE(task_started == true);  // 确保任务执行成功
 }
+
+
+TEST_CASE("ThreadPool submits task and returns correct result", "[submit]")
+{
+  threadpool pool(2);
+
+  auto fut1 = pool.submit([] { return 1 + 1; });
+  auto fut2 = pool.submit([](int x) { return x * 10; }, 5);
+
+  REQUIRE(fut1.get() == 2);
+  REQUIRE(fut2.get() == 50);
+}
+
+TEST_CASE("ThreadPool shutdown is idempotent", "[shutdown][idempotent]")
+{
+  threadpool pool(2);
+  pool.submit([] { std::this_thread::sleep_for(std::chrono::milliseconds(50)); }).get();
+
+  pool.shutdown();     // 第一次关闭
+  pool.shutdown();     // 再次调用应无异常
+  pool.shutdown();     // 多次也应该没问题
+
+  REQUIRE(pool.is_running() == false);
+}
+
+TEST_CASE("ThreadPool reboot is idempotent and safe", "[reboot][idempotent]")
+{
+  threadpool pool(2);
+
+  pool.reboot(3);  // 第一次重启
+  REQUIRE(pool.total_threads() == 3);
+
+  pool.reboot(6);  // 相同参数再次重启, 不应出错
+  REQUIRE(pool.total_threads() == 6);
+
+  auto fut = pool.submit([] { return 100; });
+  REQUIRE(fut.get() == 100);
+}
+
+TEST_CASE("ThreadPool reboot after shutdown recovers correctly", "[reboot][recover]")
+{
+  threadpool pool(2);
+  pool.shutdown();  // 关闭线程池
+
+  REQUIRE(pool.is_running() == false);
+
+  pool.reboot(4);  // 重新启动
+  REQUIRE(pool.is_running() == true);
+  REQUIRE(pool.total_threads() == 4);
+
+  auto fut = pool.submit([] { return 42; });
+  REQUIRE(fut.get() == 42);
+}
+
+TEST_CASE("ThreadPool discard tasks on shutdown", "[shutdown][discard]")
+{
+  threadpool pool(2);
+  std::promise<void> start_flag;
+  std::shared_future<void> start_future(start_flag.get_future());
+
+  for (int i = 0; i < 5; ++i)
+  {
+    pool.submit([start_future] { start_future.wait(); });
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  start_flag.set_value();  // 先触发所有正在执行的任务，不让它们挂住
+  pool.shutdown(threadpool::shutdown_mode::DiscardTasks);
+
+  REQUIRE(pool.is_running() == false);
+}
+
+TEST_CASE("ThreadPool discard tasks on shutdown2", "[shutdown][discard]")
+{
+  threadpool pool(2);
+  std::promise<void> start_flag;
+  std::shared_future<void> start_future(start_flag.get_future());
+  std::atomic<int> executed_tasks{0};
+
+  for (int i = 0; i < 5; ++i)
+  {
+    pool.submit([start_future, &executed_tasks] {
+      start_future.wait();
+      ++executed_tasks;
+    });
+  }
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  start_flag.set_value();  // 让已开始任务结束
+
+  pool.shutdown(threadpool::shutdown_mode::DiscardTasks);
+
+  REQUIRE(pool.is_running() == false);
+  REQUIRE(executed_tasks.load() <= 2);  // 最多只能有2个任务开始执行
+}
+
+
+TEST_CASE("ThreadPool throws if submit after shutdown", "[submit][error]")
+{
+  threadpool pool(1);
+  pool.shutdown();
+
+  REQUIRE_THROWS_AS(pool.submit([] { return 1; }), std::runtime_error);
+}
