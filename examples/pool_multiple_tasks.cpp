@@ -1,4 +1,5 @@
 #include <iostream>
+#include <string>
 
 #include "thread_pool/thread_pool.h"
 
