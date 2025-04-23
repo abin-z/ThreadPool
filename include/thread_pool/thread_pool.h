@@ -44,22 +44,25 @@ class threadpool
     bool running;               // 线程池是否在运行
   };
 
+  /// @brief 关闭线程的模式
+  enum class shutdown_mode : unsigned char
+  {
+    WaitAllTasks,  // 等待所有已提交的任务执行完再关闭
+    DiscardTasks   // 立即关闭线程池, 抛弃尚未开始的任务
+  };
+
  public:
-  /// @brief 构造函数, 初始化线程池, 创建指定数量的工作线程
+  /// @brief 构造函数, 初始化线程池并启动指定数量的工作线程
+  /// @param thread_count 要创建的线程数量, 默认为硬件支持的并发线程数(若无法获取则为 4)
   explicit threadpool(std::size_t thread_count = default_thread_count())
   {
-    start(thread_count);  // 创建线程
+    initialize(thread_count);  // 创建线程
   }
 
   /// @brief 析构函数, 停止所有线程并等待它们完成
   ~threadpool()
   {
-    stop_ = true;
-    cv_.notify_all();
-    for (std::thread &worker : workers_)
-    {
-      if (worker.joinable()) worker.join();
-    }
+    shutdown(shutdown_mode::WaitAllTasks);
   }
 
   /// @brief 提交任务到线程池并返回一个 future 对象, 用户可以通过它获取任务的返回值
@@ -72,7 +75,7 @@ class threadpool
   template <typename F, typename... Args>
   auto submit(F &&f, Args &&...args) -> std::future<decltype(f(args...))>
   {
-    if (stop_) throw std::runtime_error("error: ThreadPool has been stopped. Cannot submit new tasks.");
+    if (!running_) throw std::runtime_error("error: ThreadPool is not running. Cannot submit new tasks.");
     using return_type = decltype(f(args...));
     // 将 f 包装成 task, task 是一个 shared_ptr 指向 packaged_task
     auto task = std::make_shared<std::packaged_task<return_type()>>(
@@ -85,6 +88,39 @@ class threadpool
     }
     cv_.notify_one();  // 通知一个等待中的工作线程有新的任务可以执行
     return ret;        // 返回 future 对象
+  }
+
+  /// @brief 关闭线程池
+  /// @param mode `WaitAllTasks` 等待所有任务执行完成后再关闭; `DiscardTasks` 立即关闭线程池, 抛弃尚未开始的任务.
+  void shutdown(shutdown_mode mode = shutdown_mode::WaitAllTasks)
+  {
+    {
+      std::lock_guard<std::mutex> locker(mtx_);
+      running_ = false;
+      if (mode == shutdown_mode::DiscardTasks)  // 放弃任务模式
+      {
+        std::queue<task_t> empty;
+        std::swap(task_queue_, empty);  // 清空任务队列
+      }
+    }
+    cv_.notify_all();
+    for (std::thread &worker : workers_)
+    {
+      if (worker.joinable()) worker.join();
+    }
+    workers_.clear();
+  }
+
+  /// @brief 重启线程池, 先关闭当前线程池(等待所有任务完成), 然后以指定的线程数量重新启动线程池.
+  /// @param thread_count 要创建的工作线程数量
+  void reboot(std::size_t thread_count)
+  {
+    if (running_)
+    {
+      shutdown(shutdown_mode::WaitAllTasks);
+    }
+    running_ = true;
+    initialize(thread_count);
   }
 
   /// @brief 当前线程池的总线程数量
@@ -111,7 +147,7 @@ class threadpool
   /// @brief 当前线程池是否正在运行(未停止)
   bool is_running() const noexcept
   {
-    return !stop_.load();
+    return running_.load();
   }
 
   /// @brief 获取线程池的当前状态信息
@@ -122,8 +158,7 @@ class threadpool
     std::size_t busy = busy_count_.load();
     std::size_t idle = total - busy;
     std::size_t pending = task_queue_.size();
-    bool running = !stop_.load();
-    return {total, busy, idle, pending, running};
+    return {total, busy, idle, pending, running_.load()};
   }
 
   // 禁用拷贝构造函数和拷贝赋值操作符
@@ -141,9 +176,9 @@ class threadpool
     return n == 0 ? 4 : n;
   }
 
-  /// @brief 启动线程池, 创建指定数量的工作线程
+  /// @brief 初始化线程池, 创建指定数量的工作线程
   /// @param thread_count 线程池中线程的数量
-  void start(std::size_t thread_count)
+  void initialize(std::size_t thread_count)
   {
     for (std::size_t i = 0; i < thread_count; ++i)
     {
@@ -155,9 +190,9 @@ class threadpool
           {
             std::unique_lock<std::mutex> locker(mtx_);
             // 等待直到任务队列中有任务, 或者线程池已停止
-            cv_.wait(locker, [this] { return stop_ || !task_queue_.empty(); });
-            if (stop_ && task_queue_.empty()) return;  // 如果线程池已经停止并且队列为空, 退出线程
-            task = std::move(task_queue_.front());     // 从队列中取出任务
+            cv_.wait(locker, [this] { return !running_ || !task_queue_.empty(); });
+            if (!running_ && task_queue_.empty()) return;  // 如果线程池已经停止并且队列为空, 退出线程
+            task = std::move(task_queue_.front());         // 从队列中取出任务
             task_queue_.pop();
           }
           ++busy_count_;
@@ -174,7 +209,7 @@ class threadpool
   std::condition_variable cv_;              // 条件变量, 用于线程同步
   mutable std::mutex mtx_;                  // 互斥锁, 保护共享资源(任务队列)
   std::atomic<std::size_t> busy_count_{0};  // 正在执行任务的线程数量
-  std::atomic<bool> stop_{false};           // 线程池是否停止
+  std::atomic<bool> running_{true};         // 线程池是否在运行
 };
 }  // namespace abin
 #endif  // ABIN_THREADPOOL_H
