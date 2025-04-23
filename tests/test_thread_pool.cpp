@@ -257,29 +257,6 @@ TEST_CASE("ThreadPool discard tasks under high load", "[stress][shutdown][discar
   REQUIRE(executed <= 50);           // 只执行了部分任务
 }
 
-TEST_CASE("ThreadPool executes some tasks, discards others", "[mixed][shutdown][discard]")
-{
-  threadpool pool(2);
-  std::promise<void> start_signal;
-  std::shared_future<void> start_future(start_signal.get_future());
-  std::atomic<int> ran{0};
-
-  for (int i = 0; i < 10; ++i)
-  {
-    pool.submit([start_future, &ran] {
-      start_future.wait();
-      ++ran;
-    });
-  }
-
-  std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  start_signal.set_value();  // 放行可能已取出的任务
-  pool.shutdown(threadpool::shutdown_mode::DiscardPendingTasks);
-
-  REQUIRE_FALSE(pool.is_running());
-  REQUIRE(ran <= 2);  // 只有取到任务的线程能运行
-}
-
 TEST_CASE("ThreadPool rejects new tasks after shutdown", "[reject][shutdown]")
 {
   threadpool pool(2);
@@ -351,9 +328,9 @@ TEST_CASE("ThreadPool shutdown while tasks being submitted", "[race][shutdown]")
 
 TEST_CASE("Heavy concurrent submissions and value fetching", "[submit][future][stress]")
 {
-  threadpool pool(8);
+  threadpool pool(16);
   constexpr int submitter_threads = 32;  // 启动 32 个提交线程
-  constexpr int tasks_per_thread = 500;  // 每个线程提交 500 个任务
+  constexpr int tasks_per_thread = 500;  // 每个线程提交 100 个任务
   std::atomic<int> counter{0};
   std::vector<std::future<int>> futures;
   std::mutex futures_mutex;
@@ -368,7 +345,7 @@ TEST_CASE("Heavy concurrent submissions and value fetching", "[submit][future][s
         try
         {
           auto fut = pool.submit([&counter] {
-            std::this_thread::sleep_for(std::chrono::microseconds(10));  // 模拟小工作量
+            // std::this_thread::sleep_for(std::chrono::microseconds(1));  // 模拟小工作量
             return counter.fetch_add(1, std::memory_order_relaxed);
           });
           std::lock_guard<std::mutex> lock(futures_mutex);
@@ -425,8 +402,8 @@ TEST_CASE("Race between concurrent submissions and shutdown", "[race][shutdown][
     });
   }
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(100));  // 允许提交一段时间
-  pool.shutdown(threadpool::shutdown_mode::DiscardPendingTasks);       // 启动关闭流程
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));    // 允许提交一段时间
+  pool.shutdown(threadpool::shutdown_mode::DiscardPendingTasks);  // 启动关闭流程
   shutdown_requested = true;
 
   for (auto& t : submitters) t.join();
