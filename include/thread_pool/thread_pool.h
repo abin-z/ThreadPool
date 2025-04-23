@@ -76,11 +76,37 @@ class threadpool
     cv_.notify_one();  // 通知一个等待中的工作线程有新的任务可以执行
     return ret;        // 返回 future 对象
   }
-  
+
+  /// @brief 当前线程池的总线程数量
+  std::size_t total_threads() const noexcept
+  {
+    return workers_.size();
+  }
+  /// @brief 获取当前等待的任务数量
+  std::size_t pending_tasks() const noexcept
+  {
+    std::lock_guard<std::mutex> locker(mtx_);
+    return task_queue_.size();
+  }
+  /// @brief 获取繁忙的线程数量
+  std::size_t busy_threads() const noexcept
+  {
+    return busy_count_.load();
+  }
+  /// @brief 获取空闲线程数量
+  std::size_t idle_threads() const noexcept
+  {
+    return workers_.size() - busy_count_.load();
+  }
+  /// @brief 当前线程池是否正在运行(未停止)
+  bool is_running() const noexcept
+  {
+    return !stop_.load();
+  }
+
   // 禁用拷贝构造函数和拷贝赋值操作符
   threadpool(const threadpool &) = delete;
   threadpool &operator=(const threadpool &) = delete;
-
   // 禁用移动构造函数和移动赋值操作符
   threadpool(threadpool &&) = delete;
   threadpool &operator=(threadpool &&) = delete;
@@ -112,7 +138,9 @@ class threadpool
             task = std::move(task_queue_.front());     // 从队列中取出任务
             task_queue_.pop();
           }
+          ++busy_count_;
           task();  // 执行任务
+          --busy_count_;
         }
       });
     }
@@ -122,8 +150,9 @@ class threadpool
   std::vector<std::thread> workers_;  // 工作线程(线程池)
   std::queue<task_t> task_queue_;     // 任务队列
   std::condition_variable cv_;        // 条件变量, 用于线程同步
-  std::mutex mtx_;                    // 互斥锁, 保护共享资源(任务队列)
+  mutable std::mutex mtx_;            // 互斥锁, 保护共享资源(任务队列)
   std::atomic<bool> stop_{false};     // 线程池是否停止
+  std::atomic<int> busy_count_{0};    // 正在执行任务的线程数量
 };
 }  // namespace abin
 #endif  // ABIN_THREADPOOL_H
