@@ -133,7 +133,6 @@ TEST_CASE("ThreadPool blocks on empty task queue", "[thread_pool]")
   REQUIRE(task_started == true);  // 确保任务执行成功
 }
 
-
 TEST_CASE("ThreadPool submits task and returns correct result", "[submit]")
 {
   threadpool pool(2);
@@ -150,9 +149,9 @@ TEST_CASE("ThreadPool shutdown is idempotent", "[shutdown][idempotent]")
   threadpool pool(2);
   pool.submit([] { std::this_thread::sleep_for(std::chrono::milliseconds(50)); }).get();
 
-  pool.shutdown();     // 第一次关闭
-  pool.shutdown();     // 再次调用应无异常
-  pool.shutdown();     // 多次也应该没问题
+  pool.shutdown();  // 第一次关闭
+  pool.shutdown();  // 再次调用应无异常
+  pool.shutdown();  // 多次也应该没问题
 
   REQUIRE(pool.is_running() == false);
 }
@@ -198,7 +197,7 @@ TEST_CASE("ThreadPool discard tasks on shutdown", "[shutdown][discard]")
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
   start_flag.set_value();  // 先触发所有正在执行的任务，不让它们挂住
-  pool.shutdown(threadpool::shutdown_mode::DiscardTasks);
+  pool.shutdown(threadpool::shutdown_mode::DiscardPendingTasks);
 
   REQUIRE(pool.is_running() == false);
 }
@@ -221,12 +220,11 @@ TEST_CASE("ThreadPool discard tasks on shutdown2", "[shutdown][discard]")
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
   start_flag.set_value();  // 让已开始任务结束
 
-  pool.shutdown(threadpool::shutdown_mode::DiscardTasks);
+  pool.shutdown(threadpool::shutdown_mode::DiscardPendingTasks);
 
   REQUIRE(pool.is_running() == false);
   REQUIRE(executed_tasks.load() <= 2);  // 最多只能有2个任务开始执行
 }
-
 
 TEST_CASE("ThreadPool throws if submit after shutdown", "[submit][error]")
 {
@@ -234,4 +232,230 @@ TEST_CASE("ThreadPool throws if submit after shutdown", "[submit][error]")
   pool.shutdown();
 
   REQUIRE_THROWS_AS(pool.submit([] { return 1; }), std::runtime_error);
+}
+
+TEST_CASE("ThreadPool discard tasks under high load", "[stress][shutdown][discard]")
+{
+  threadpool pool(4);            // 线程池最多有 4 个工作线程
+  std::atomic<int> executed{0};  // 记录执行过的任务数
+
+  // 提交 10000 个任务，模拟高负载
+  for (int i = 0; i < 10000; ++i)
+  {
+    pool.submit([&executed] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));  // 模拟任务执行时间
+      ++executed;
+    });
+  }
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));  // 等待任务开始执行
+
+  pool.shutdown(threadpool::shutdown_mode::DiscardPendingTasks);  // 放弃未开始的任务
+
+  // 确保线程池已关闭
+  REQUIRE_FALSE(pool.is_running());  // 线程池应该已经停止
+  REQUIRE(executed <= 50);           // 只执行了部分任务
+}
+
+TEST_CASE("ThreadPool executes some tasks, discards others", "[mixed][shutdown][discard]")
+{
+  threadpool pool(2);
+  std::promise<void> start_signal;
+  std::shared_future<void> start_future(start_signal.get_future());
+  std::atomic<int> ran{0};
+
+  for (int i = 0; i < 10; ++i)
+  {
+    pool.submit([start_future, &ran] {
+      start_future.wait();
+      ++ran;
+    });
+  }
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  start_signal.set_value();  // 放行可能已取出的任务
+  pool.shutdown(threadpool::shutdown_mode::DiscardPendingTasks);
+
+  REQUIRE_FALSE(pool.is_running());
+  REQUIRE(ran <= 2);  // 只有取到任务的线程能运行
+}
+
+TEST_CASE("ThreadPool rejects new tasks after shutdown", "[reject][shutdown]")
+{
+  threadpool pool(2);
+  pool.shutdown();
+
+  REQUIRE_FALSE(pool.is_running());
+  REQUIRE_THROWS_AS(pool.submit([] {}), std::runtime_error);
+}
+
+TEST_CASE("ThreadPool can reboot and accept tasks", "[reboot][submit]")
+{
+  threadpool pool(2);
+  pool.shutdown();
+  REQUIRE_FALSE(pool.is_running());
+
+  pool.reboot(3);
+  REQUIRE(pool.is_running());
+  REQUIRE(pool.total_threads() == 3);
+
+  auto f = pool.submit([] { return 42; });
+  REQUIRE(f.get() == 42);
+}
+
+TEST_CASE("ThreadPool survives multiple shutdown and reboot", "[reboot][stability]")
+{
+  threadpool pool(2);
+
+  for (int i = 0; i < 50; ++i)
+  {
+    pool.shutdown();
+    REQUIRE_FALSE(pool.is_running());
+    pool.reboot(2);
+    REQUIRE(pool.is_running());
+
+    auto f = pool.submit([] { return 7; });
+    REQUIRE(f.get() == 7);
+  }
+}
+
+TEST_CASE("ThreadPool shutdown while tasks being submitted", "[race][shutdown]")
+{
+  threadpool pool(4);
+  std::atomic<int> success_count{0};
+  std::atomic<int> fail_count{0};
+  std::atomic<bool> stop{false};
+
+  std::thread submitter([&] {
+    while (!stop)
+    {
+      try
+      {
+        pool.submit([&] { success_count++; });
+      }
+      catch (...)
+      {
+        fail_count++;
+      }
+    }
+  });
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  pool.shutdown(threadpool::shutdown_mode::DiscardPendingTasks);
+  stop = true;
+  submitter.join();
+
+  REQUIRE_FALSE(pool.is_running());
+  REQUIRE(success_count >= 0);
+}
+
+TEST_CASE("Heavy concurrent submissions and value fetching", "[submit][future][stress]")
+{
+  threadpool pool(8);
+  constexpr int submitter_threads = 32;  // 启动 32 个提交线程
+  constexpr int tasks_per_thread = 500;  // 每个线程提交 500 个任务
+  std::atomic<int> counter{0};
+  std::vector<std::future<int>> futures;
+  std::mutex futures_mutex;
+
+  // 多线程并发提交任务，并收集 future 对象
+  std::vector<std::thread> submitters;
+  for (int i = 0; i < submitter_threads; ++i)
+  {
+    submitters.emplace_back([&] {
+      for (int j = 0; j < tasks_per_thread; ++j)
+      {
+        try
+        {
+          auto fut = pool.submit([&counter] {
+            std::this_thread::sleep_for(std::chrono::microseconds(10));  // 模拟小工作量
+            return counter.fetch_add(1, std::memory_order_relaxed);
+          });
+          std::lock_guard<std::mutex> lock(futures_mutex);
+          futures.push_back(std::move(fut));
+        }
+        catch (...)
+        {
+          // pool 被关闭也不会崩
+        }
+      }
+    });
+  }
+
+  for (auto& t : submitters) t.join();
+
+  // 获取所有 future 的结果
+  std::set<int> results;
+  for (auto& fut : futures)
+  {
+    results.insert(fut.get());
+  }
+
+  pool.shutdown();
+  REQUIRE(results.size() == submitter_threads * tasks_per_thread);
+}
+
+TEST_CASE("Race between concurrent submissions and shutdown", "[race][shutdown][stress]")
+{
+  threadpool pool(4);
+  std::atomic<bool> shutdown_requested{false};
+  std::atomic<int> submitted{0};
+  std::atomic<int> executed{0};
+
+  // 启动多个提交线程
+  std::vector<std::thread> submitters;
+  for (int i = 0; i < 16; ++i)
+  {
+    submitters.emplace_back([&] {
+      while (!shutdown_requested)
+      {
+        try
+        {
+          pool.submit([&executed] {
+            std::this_thread::sleep_for(std::chrono::microseconds(20));
+            executed.fetch_add(1, std::memory_order_relaxed);
+          });
+          submitted++;
+        }
+        catch (...)
+        {
+          // 提交失败（线程池已关闭）时跳过
+        }
+      }
+    });
+  }
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));  // 允许提交一段时间
+  pool.shutdown(threadpool::shutdown_mode::DiscardPendingTasks);       // 启动关闭流程
+  shutdown_requested = true;
+
+  for (auto& t : submitters) t.join();
+
+  REQUIRE_FALSE(pool.is_running());
+  REQUIRE(executed <= submitted);  // 执行数应该不大于提交数
+}
+
+TEST_CASE("Recursive task submissions (C++11)", "[recursive][submit][stress]")
+{
+  threadpool pool(4);         // 使用 4 个线程池
+  std::atomic<int> depth{0};  // 跟踪递归深度
+
+  // 递归提交任务
+  std::function<void(int)> recursive_submit = [&](int level) -> void {
+    if (level <= 0) return;  // 递归结束条件
+    pool.submit([&, level] {
+      depth.fetch_add(1, std::memory_order_relaxed);  // 增加深度计数
+      recursive_submit(level - 1);                    // 递归提交
+    });
+  };
+
+  for (int i = 0; i < 8; ++i)
+  {
+    recursive_submit(50);  // 每条链递归 50 次
+  }
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));  // 等待任务完成
+  pool.shutdown();                                              // 关闭线程池
+
+  REQUIRE(depth > 0);  // 确保任务已经提交并执行
 }

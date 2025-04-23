@@ -1,10 +1,15 @@
 /**************************************************************************************************************
  *~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * @file: thread_pool.h
- * @version: v0.9.0
- * @description:
- * - Features :
- *   - Lightweight & Easy-to-Use: A C++11 thread pool with task submission and future-based return value support.
+ * @version: v0.9.1
+ * @description: A cross-platform, lightweight, easy-to-use C++11 thread pool that supports submitting tasks with
+ *               arbitrary parameters and obtaining return values
+ *  - Futures
+ *    - Task-based: Supports tasks with arbitrary parameters, and obtains return values ​​through `std::future`.
+ *    - Cross-Platform: Works on platforms supporting C++11.
+ *    - Thread Safety: Uses `std::mutex`, `std::condition_variable`, and atomic variables for synchronization.
+ *    - Flexible Shutdown: Two modes for shutdown: `WaitForAllTasks` and `DiscardPendingTasks`.
+ *    - Lightweight & Easy-to-Use: Simple API with minimal setup.
  *
  * @author: abin
  * @date: 2025-04-20
@@ -44,11 +49,17 @@ class threadpool
     bool running;               // 线程池是否在运行
   };
 
-  /// @brief 关闭线程的模式
+  /// @brief 关闭线程池的模式
   enum class shutdown_mode : unsigned char
   {
-    WaitAllTasks,  // 等待所有已提交的任务执行完再关闭
-    DiscardTasks   // 立即关闭线程池, 抛弃尚未开始的任务
+    /// @brief 等待所有已提交的任务完成后再关闭线程池
+    /// 在此模式下, 线程池会等待所有任务(包括已开始和未开始的任务)执行完成后再关闭.
+    WaitForAllTasks,
+
+    /// @brief 立即关闭线程池, 丢弃尚未开始的任务.
+    /// 在此模式下, 线程池会立即停止接收新任务, 丢弃所有尚未开始执行的任务,
+    /// 但已经开始执行的任务会继续执行, 直到它们完成.
+    DiscardPendingTasks
   };
 
  public:
@@ -62,7 +73,7 @@ class threadpool
   /// @brief 析构函数, 停止所有线程并等待它们完成
   ~threadpool()
   {
-    shutdown(shutdown_mode::WaitAllTasks);
+    shutdown(shutdown_mode::WaitForAllTasks);
   }
 
   /// @brief 提交任务到线程池并返回一个 future 对象, 用户可以通过它获取任务的返回值
@@ -91,14 +102,15 @@ class threadpool
   }
 
   /// @brief 关闭线程池
-  /// @param mode `WaitAllTasks` 等待所有任务执行完成后再关闭; `DiscardTasks` 立即关闭线程池, 抛弃尚未开始的任务.
-  void shutdown(shutdown_mode mode = shutdown_mode::WaitAllTasks)
+  /// @param mode `WaitForAllTasks` 等待所有任务执行完成后再关闭; `DiscardPendingTasks` 立即关闭线程池,
+  /// 抛弃尚未开始的任务.
+  void shutdown(shutdown_mode mode = shutdown_mode::WaitForAllTasks)
   {
     {
       std::lock_guard<std::mutex> lock(mtx_);
       if (!running_) return;  // 已经关闭则直接返回
       running_ = false;
-      if (mode == shutdown_mode::DiscardTasks)  // 放弃任务模式
+      if (mode == shutdown_mode::DiscardPendingTasks)  // 放弃任务模式
       {
         std::queue<task_t> empty;
         std::swap(task_queue_, empty);  // 清空任务队列
@@ -116,7 +128,7 @@ class threadpool
   /// @param thread_count 要创建的工作线程数量
   void reboot(std::size_t thread_count)
   {
-    shutdown(shutdown_mode::WaitAllTasks);
+    shutdown(shutdown_mode::WaitForAllTasks);
     {
       std::lock_guard<std::mutex> lock(mtx_);
       if (running_) return;  // 已重启, 无需再次初始化(幂等)
