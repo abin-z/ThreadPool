@@ -34,14 +34,14 @@ class threadpool
 {
   using task_t = std::function<void()>;  // 定义任务类型为可调用对象
  public:
-  /// @brief 表示线程池当前状态的结构体
+  /// @brief 线程池当前状态的结构体
   struct status
   {
-    std::size_t total_threads;  ///< 总线程数
-    std::size_t busy_threads;   ///< 正在执行任务的线程数
-    std::size_t idle_threads;   ///< 空闲线程数
-    std::size_t pending_tasks;  ///< 等待中的任务数
-    bool running;               ///< 线程池是否在运行
+    std::size_t total_threads;  // 总线程数
+    std::size_t busy_threads;   // 正在执行任务的线程数
+    std::size_t idle_threads;   // 空闲线程数
+    std::size_t pending_tasks;  // 等待中的任务数
+    bool running;               // 线程池是否在运行
   };
 
  public:
@@ -58,7 +58,7 @@ class threadpool
     cv_.notify_all();
     for (std::thread &worker : workers_)
     {
-      worker.join();
+      if (worker.joinable()) worker.join();
     }
   }
 
@@ -72,7 +72,7 @@ class threadpool
   template <typename F, typename... Args>
   auto submit(F &&f, Args &&...args) -> std::future<decltype(f(args...))>
   {
-    if (stop_) throw std::runtime_error("error: submit on stopped threadpool");  // 防止在已停止的线程池上提交任务
+    if (stop_) throw std::runtime_error("error: ThreadPool has been stopped. Cannot submit new tasks.");
     using return_type = decltype(f(args...));
     // 将 f 包装成 task, task 是一个 shared_ptr 指向 packaged_task
     auto task = std::make_shared<std::packaged_task<return_type()>>(
@@ -145,7 +145,7 @@ class threadpool
   /// @param thread_count 线程池中线程的数量
   void start(std::size_t thread_count)
   {
-    for (int i = 0; i < thread_count; ++i)
+    for (std::size_t i = 0; i < thread_count; ++i)
     {
       // 创建并启动工作线程
       workers_.emplace_back([this] {
@@ -173,8 +173,8 @@ class threadpool
   std::queue<task_t> task_queue_;           // 任务队列
   std::condition_variable cv_;              // 条件变量, 用于线程同步
   mutable std::mutex mtx_;                  // 互斥锁, 保护共享资源(任务队列)
-  std::atomic<bool> stop_{false};           // 线程池是否停止
   std::atomic<std::size_t> busy_count_{0};  // 正在执行任务的线程数量
+  std::atomic<bool> stop_{false};           // 线程池是否停止
 };
 }  // namespace abin
 #endif  // ABIN_THREADPOOL_H
