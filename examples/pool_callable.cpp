@@ -71,5 +71,6 @@ int main()
   pool.submit(std::move(task));  // 必须 move
   std::cout << "packaged_task result: " << fut_str.get() << "\n";
 
-  pool.shutdown();  // 停止线程池，等待任务完成
+  pool.wait_all();  // 等待任务完成
+  std::cout << "===All tasks completed.===\n";
 }
