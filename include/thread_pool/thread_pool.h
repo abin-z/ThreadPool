@@ -1,7 +1,7 @@
 /**************************************************************************************************************
  *~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  * @file: thread_pool.h
- * @version: v0.9.1
+ * @version: v0.9.2
  * @description: A cross-platform, lightweight, easy-to-use C++11 thread pool that supports submitting tasks with
  *               arbitrary parameters and obtaining return values
  *  - Futures
@@ -99,6 +99,14 @@ class threadpool
     }
     cv_.notify_one();  // 通知一个等待中的工作线程有新的任务可以执行
     return ret;        // 返回 future 对象
+  }
+
+  /// @brief 阻塞直到所有任务完成(任务队列为空且没有任务在执行), 若没有任务，立即返回
+  void wait_all()
+  {
+    if (busy_count_ == 0 && pending_tasks() == 0) return;
+    std::unique_lock<std::mutex> lock(mtx_done_);
+    cv_done_.wait(lock, [this] { return busy_count_ == 0 && pending_tasks() == 0; });
   }
 
   /// @brief 关闭线程池
@@ -213,18 +221,31 @@ class threadpool
           ++busy_count_;
           task();  // 执行任务
           --busy_count_;
+          // 判断任务是否已全部完成
+          if (busy_count_ == 0 && task_queue_.empty())
+          {
+            std::lock_guard<std::mutex> lock(mtx_done_);
+            if (busy_count_ == 0 && pending_tasks() == 0)  // 二次确认, 避免竞态
+            {
+              cv_done_.notify_all();
+            }
+          }
         }
       });
     }
   }
 
  private:
-  std::vector<std::thread> workers_;        // 工作线程(线程池)
-  std::queue<task_t> task_queue_;           // 任务队列
-  std::condition_variable cv_;              // 条件变量, 用于线程同步
-  mutable std::mutex mtx_;                  // 互斥锁, 保护共享资源(任务队列)
+  std::vector<std::thread> workers_;  // 工作线程集合，用于并发执行任务
+  std::queue<task_t> task_queue_;     // 等待执行的任务队列
+  std::condition_variable cv_;        // 条件变量，用于通知工作线程有新任务到来
+  mutable std::mutex mtx_;            // 主互斥锁，保护任务队列和与其相关的状态
+
   std::atomic<std::size_t> busy_count_{0};  // 正在执行任务的线程数量
-  std::atomic<bool> running_{true};         // 线程池是否在运行
+  std::atomic<bool> running_{true};         // 线程池是否处于运行状态
+
+  mutable std::mutex mtx_done_;      // 用于保护完成通知的互斥锁(wait_all 用)
+  std::condition_variable cv_done_;  // 条件变量，用于等待所有任务执行完毕(配合 wait_all 使用)
 };
 }  // namespace abin
 #endif  // ABIN_THREADPOOL_H
