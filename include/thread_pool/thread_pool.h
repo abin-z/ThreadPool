@@ -39,8 +39,8 @@ class threadpool
 {
   using task_t = std::function<void()>;  // 定义任务类型为可调用对象
  public:
-  /// @brief 线程池当前状态的结构体
-  struct status
+  /// @brief 线程池当前状态信息结构体
+  struct status_info
   {
     std::size_t total_threads;  // 总线程数
     std::size_t busy_threads;   // 正在执行任务的线程数
@@ -165,7 +165,7 @@ class threadpool
   }
 
   /// @brief 获取线程池的当前状态信息
-  status status() const noexcept
+  status_info status() const noexcept
   {
     std::lock_guard<std::mutex> lock(mtx_);
     std::size_t total = workers_.size();
