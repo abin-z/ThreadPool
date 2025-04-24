@@ -6,7 +6,7 @@
 
 **A cross-platform, header-only, task-based C++11 thread pool supporting arbitrary arguments and return values via `std::future`.**
 
-### 📌 Overview
+## 📌 Overview
 
 A **Thread Pool** is a tool that manages threads based on the **pooling concept**, commonly used in multithreaded programming.
 
@@ -223,13 +223,13 @@ threadpool::status_info status() const noexcept;  // Summary of status info
 
 ------
 
-### 💡 Contribution Guidelines
+## 💡 Contribution Guidelines
 
 🗨️ Welcome to submit **Issue** and **Pull request** to improve this project!
 
 -----
 
-### 🙌 Acknowledgements
+## 🙌 Acknowledgements
 
 Thanks to **[Catch2](https://github.com/catchorg/Catch2)** for providing great support and helping with unit testing of this project!
 
