@@ -1,4 +1,8 @@
-# 基于c++11的轻量级线程池
+# 跨平台轻量级线程池(C++11)
+
+[![iniparser](https://img.shields.io/badge/Thread_Pool-8A2BE2)](https://github.com/abin-z/ThreadPool) [![headeronly](https://img.shields.io/badge/Header_Only-green)](include/thread_pool/thread_pool.h) [![moderncpp](https://img.shields.io/badge/Modern_C%2B%2B-218c73)](https://learn.microsoft.com/en-us/cpp/cpp/welcome-back-to-cpp-modern-cpp?view=msvc-170) [![licenseMIT](https://img.shields.io/badge/License-MIT-green)](https://opensource.org/license/MIT) [![version](https://img.shields.io/badge/version-0.9.2-green)](https://github.com/abin-z/ThreadPool/releases)
+
+🌍 Languages/语言:  [English](README.md)  |  [简体中文](README.zh-CN.md)
 
 **一个跨平台, 简单易用的Header-only线程池库, 基于Task提交, 支持提交任意参数提交, 支持获取返回值.**
 
@@ -42,22 +46,110 @@
 
 #### 基础示例代码
 
+**基础使用**
+
 ```cpp
 #include "thread_pool.h"
 #include <iostream>
 
 int main() {
-  abin::threadpool executor(4);
+  abin::threadpool pool(4);
 
-  auto future1 = executor.submit([] { return 42; });
+  auto future1 = pool.submit([] { return 42; });
   std::cout << "结果: " << future1.get() << "\n";
 
-  auto future2 = executor.submit([](int a, int b) { return a + b; }, 5, 7);
+  auto future2 = pool.submit([](int a, int b) { return a + b; }, 5, 7);
   std::cout << "加法结果: " << future2.get() << "\n";
 
   return 0;
 }
 ```
+
+**提交任意类型任意参数的可调用对象**
+
+<details>
+<summary>点击展开查看代码</summary>
+
+```cpp
+#include "thread_pool.h"
+
+#include <functional>
+#include <future>
+#include <iostream>
+#include <string>
+
+void normal_function(int x)
+{
+  std::cout << "normal_function: " << x << std::endl;
+}
+
+struct MyClass
+{
+  void member_function(int y)
+  {
+    std::cout << "MyClass::member_function: " << y << std::endl;
+  }
+  int add(int a, int b)
+  {
+    return a + b;
+  }
+};
+
+struct Functor
+{
+  void operator()(const std::string& msg) const
+  {
+    std::cout << "Functor called with: " << msg << std::endl;
+  }
+};
+
+int main()
+{
+  abin::threadpool pool(4);
+
+  // 提交一个普通函数
+  pool.submit(normal_function, 42);
+
+  // 提交一个无捕获 lambda
+  pool.submit([] { std::cout << "lambda no capture\n"; });
+
+  // 提交一个有捕获 lambda
+  int value = 99;
+  pool.submit([value] { std::cout << "lambda with capture: " << value << "\n"; });
+
+  // 提交成员函数, 使用lambda
+  MyClass obj;
+  pool.submit([&obj] { obj.member_function(123); });
+
+  // 提交成员函数, 使用 std::mem_fn
+  std::future<int> ret = pool.submit(std::mem_fn(&MyClass::add), &obj, 3, 4);
+  std::cout << "add result1: " << ret.get() << "\n";
+
+  // 提交成员函数, 使用 std::bind
+  std::future<int> fut_add = pool.submit(std::bind(&MyClass::add, &obj, 2, 3));
+  std::cout << "add result2: " << fut_add.get() << "\n";
+
+  // 提交一个函数对象(仿函数)
+  Functor f;
+  pool.submit(f, "hello functor");
+
+  // 使用 std::bind 提交
+  auto bound = std::bind(&MyClass::add, &obj, 5, 6);
+  std::future<int> fut_bound = pool.submit(bound);
+  std::cout << "bound result: " << fut_bound.get() << "\n";
+
+  // 提交一个 std::packaged_task(注意: 低版本msvc可能报错)
+  std::packaged_task<std::string()> task([] { return std::string("from packaged_task"); });
+  std::future<std::string> fut_str = task.get_future();
+  pool.submit(std::move(task));  // 必须 move
+  std::cout << "packaged_task result: " << fut_str.get() << "\n";
+
+  pool.wait_all();  // 等待任务完成
+  std::cout << "===All tasks completed.===\n";
+}
+```
+
+</details>
 
 更多更详细的使用案例, 请移步到[`examples`](examples/)文件夹下查看
 
@@ -116,13 +208,15 @@ void reboot(std::size_t thread_count);
 #### 获取状态信息
 
 ```cpp
-bool is_running() const noexcept;               // 线程池是否在运行
-std::size_t total_threads() const noexcept;     // 线程池总共的线程数
-std::size_t busy_threads() const noexcept;      // 繁忙的线程数量
-std::size_t idle_threads() const noexcept;      // 空闲的线程数量
-std::size_t pending_tasks() const noexcept;     // 正在等待的任务数量
-threadpool::status status() const noexcept;     // 状态信息汇总
+bool is_running() const noexcept;                 // 线程池是否在运行
+std::size_t total_threads() const noexcept;       // 线程池总共的线程数
+std::size_t busy_threads() const noexcept;        // 繁忙的线程数量
+std::size_t idle_threads() const noexcept;        // 空闲的线程数量
+std::size_t pending_tasks() const noexcept;       // 正在等待的任务数量
+threadpool::status_info status() const noexcept;  // 状态信息汇总
 ```
+
+- 提供对池内部状态的详细了解
 
 ------
 
@@ -136,14 +230,18 @@ threadpool::status status() const noexcept;     // 状态信息汇总
 
 感谢 **[Catch2](https://github.com/catchorg/Catch2)** 提供强大支持，助力本项目的单元测试!
 
+感谢 **https://github.com/progschj/ThreadPool** 为本项目提供灵感!
+
 ------
 
 ### 📜 许可证
 
-本项目采用[ **MIT** 许可证](./LICENSE)。版权所有 © 2025–Present Abin。
+本项目采用[ **MIT** 许可证](./LICENSE)。
+
+版权所有 © 2025–Present Abin。
 
 ------
 
 ### 🙋‍♂️ 作者
 
-Abin 📧 [GitHub](https://github.com/abin-z)
+Abin 📎[GitHub](https://github.com/abin-z)
