@@ -67,7 +67,7 @@ class threadpool
   /// @param thread_count 要创建的线程数量, 默认为硬件支持的并发线程数(若无法获取则为 4)
   explicit threadpool(std::size_t thread_count = default_thread_count())
   {
-    launch_threads(thread_count);  // 创建线程
+    launch_threads(validate_thread_count(thread_count));  // 创建线程
   }
 
   /// @brief 析构函数, 停止所有线程并等待它们完成
@@ -141,7 +141,7 @@ class threadpool
       std::lock_guard<std::mutex> lock(mtx_);
       if (running_) return;  // 已重启, 无需再次初始化(幂等)
       running_ = true;
-      launch_threads(thread_count);
+      launch_threads(validate_thread_count(thread_count));
     }
   }
 
@@ -200,6 +200,13 @@ class threadpool
   {
     auto n = std::thread::hardware_concurrency();
     return n == 0 ? 4 : n;
+  }
+
+  /// @brief 验证线程数是否合法, 1 <= count <= 4096
+  static std::size_t validate_thread_count(std::size_t count)
+  {
+    if (count < 1 || count > 4096) throw std::invalid_argument("invalid thread_count: must be in range [1, 1024]");
+    return count;
   }
 
   /// @brief 启动线程池, 创建指定数量的工作线程
