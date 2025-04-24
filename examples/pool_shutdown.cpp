@@ -13,6 +13,7 @@ int main()
     });
   }
   std::cout << "===All tasks submitted.===\n";
+  std::this_thread::sleep_for(std::chrono::milliseconds(10));
   // pool.shutdown();  // 关闭线程池, 会等待所有任务完成
   pool.shutdown(abin::threadpool::shutdown_mode::DiscardPendingTasks);  // 关闭线程池, 丢弃未开始的任务
   std::cout << "===Thread pool shutdown.===\n";
