@@ -436,3 +436,177 @@ TEST_CASE("Recursive task submissions (C++11)", "[recursive][submit][stress]")
 
   REQUIRE(depth > 0);  // 确保任务已经提交并执行
 }
+
+TEST_CASE("wait_all returns immediately if no task is pending", "[wait_all][empty]")
+{
+  abin::threadpool pool(2);
+  pool.wait_all();  // Should return instantly
+  REQUIRE(pool.pending_tasks() == 0);
+  REQUIRE(pool.busy_threads() == 0);
+}
+
+TEST_CASE("wait_all waits until all tasks complete", "[wait_all][basic]")
+{
+  abin::threadpool pool(2);
+  std::atomic<int> counter{0};
+
+  for (int i = 0; i < 10; ++i)
+  {
+    pool.submit([&] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(30));
+      ++counter;
+    });
+  }
+
+  pool.wait_all();  // Should block until all 10 tasks are done
+  REQUIRE(counter == 10);
+}
+
+TEST_CASE("wait_all with recursive submissions", "[wait_all][recursive]")
+{
+  abin::threadpool pool(4);
+  std::atomic<int> depth{0};
+
+  std::function<void(int)> recursive_submit = [&](int level) {
+    if (level <= 0) return;
+    pool.submit([&, level] {
+      depth.fetch_add(1, std::memory_order_relaxed);
+      recursive_submit(level - 1);
+    });
+  };
+
+  for (int i = 0; i < 5; ++i)
+  {
+    recursive_submit(30);  // Recursive depth chains
+  }
+
+  pool.wait_all();  // Ensure all recursive chains complete
+  REQUIRE(depth > 0);
+}
+
+TEST_CASE("wait_all works with packaged_task", "[wait_all][packaged_task]")
+{
+  abin::threadpool pool(2);
+  std::vector<std::future<int>> results;
+
+  for (int i = 0; i < 5; ++i)
+  {
+    std::packaged_task<int()> task([i] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+      return i * i;
+    });
+    results.push_back(task.get_future());
+    pool.submit(std::move(task));
+  }
+
+  pool.wait_all();  // Wait for all packaged_tasks
+  for (int i = 0; i < 5; ++i)
+  {
+    REQUIRE(results[i].get() == i * i);
+  }
+}
+
+TEST_CASE("wait_all then shutdown is safe", "[wait_all][shutdown]")
+{
+  abin::threadpool pool(3);
+  std::atomic<int> sum{0};
+
+  for (int i = 0; i < 6; ++i)
+  {
+    pool.submit([&] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      sum += i;
+    });
+  }
+
+  pool.wait_all();   // Ensure all tasks are done
+  pool.shutdown();   // Shutdown after wait
+  REQUIRE(sum > 0);  // Validate execution
+}
+
+TEST_CASE("submit after shutdown throws", "[submit][shutdown][exception]") {
+  abin::threadpool pool(2);
+  pool.shutdown();  // Explicit shutdown
+
+  REQUIRE_THROWS_AS(pool.submit([] { return 42; }), std::runtime_error);
+}
+
+TEST_CASE("shutdown is idempotent", "[shutdown][safe]") {
+  abin::threadpool pool(2);
+  pool.shutdown();  // First shutdown
+  REQUIRE_NOTHROW(pool.shutdown());  // Should not crash or throw again
+}
+
+TEST_CASE("reboot is idempotent when running", "[reboot][idempotent]") {
+  abin::threadpool pool(2);
+  pool.reboot(4);  // shutdown then restart
+  pool.reboot(4);  // should be ignored if already running
+  REQUIRE(pool.total_threads() == 4);
+}
+
+TEST_CASE("wait_all after shutdown returns immediately", "[wait_all][post-shutdown]") {
+  abin::threadpool pool(2);
+  pool.submit([] { std::this_thread::sleep_for(std::chrono::milliseconds(10)); });
+  pool.shutdown();  // All done
+  REQUIRE_NOTHROW(pool.wait_all());  // Should not hang or crash
+}
+
+TEST_CASE("exception inside task doesn't crash pool", "[exception][submit]") {
+  abin::threadpool pool(2);
+  auto fut = pool.submit([]() -> int {
+    throw std::runtime_error("task failed");
+  });
+
+  REQUIRE_THROWS_AS(fut.get(), std::runtime_error);
+  REQUIRE(pool.is_running());  // Pool should still be alive
+}
+
+TEST_CASE("submit supports void return type", "[submit][void]") {
+  abin::threadpool pool(2);
+  bool flag = false;
+
+  auto fut = pool.submit([&] { flag = true; });
+  fut.get();  // Should not throw
+
+  REQUIRE(flag);
+}
+
+TEST_CASE("threadpool with 1 thread handles all tasks", "[single-threaded][submit]") {
+  abin::threadpool pool(1);  // Single thread mode
+  std::vector<std::future<int>> results;
+  for (int i = 0; i < 10; ++i) {
+    results.emplace_back(pool.submit([i] { return i * 2; }));
+  }
+
+  for (int i = 0; i < 10; ++i) {
+    REQUIRE(results[i].get() == i * 2);
+  }
+}
+
+TEST_CASE("destructor waits for all tasks", "[destructor][RAII]") {
+  std::atomic<int> count{0};
+
+  {
+    abin::threadpool pool(2);
+    for (int i = 0; i < 5; ++i) {
+      pool.submit([&] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        ++count;
+      });
+    }
+  }  // RAII scope ends, destructor calls wait_all + shutdown
+
+  REQUIRE(count == 5);
+}
+
+TEST_CASE("invalid thread counts are rejected", "[validate][range]") {
+  REQUIRE_THROWS_AS(abin::threadpool(0), std::invalid_argument);       // zero
+  REQUIRE_THROWS_AS(abin::threadpool(4097), std::invalid_argument);    // too large
+  REQUIRE_THROWS_AS(abin::threadpool(static_cast<std::size_t>(-5)), std::invalid_argument);  // negative converted
+
+  // Valid
+  REQUIRE_NOTHROW(abin::threadpool(1));
+  REQUIRE_NOTHROW(abin::threadpool(8));
+  REQUIRE_NOTHROW(abin::threadpool(1024));
+  REQUIRE_NOTHROW(abin::threadpool(4096));
+}
