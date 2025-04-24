@@ -29,4 +29,7 @@ int main()
   std::cout << "\nafter status_info.busy_threads = " << ss.busy_threads;    // 繁忙的线程数量
   std::cout << "\nafter status_info.idle_threads = " << ss.idle_threads;    // 空闲的线程数量
   std::cout << "\nafter status_info.pending_tasks = " << ss.pending_tasks;  // 正在等待的任务数量
+  std::cout << std::endl;
+  pool.wait_all();
+  std::cout << "===All tasks completed.===\n";
 }
