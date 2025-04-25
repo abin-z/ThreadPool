@@ -524,44 +524,48 @@ TEST_CASE("wait_all then shutdown is safe", "[wait_all][shutdown]")
   REQUIRE(sum > 0);  // Validate execution
 }
 
-TEST_CASE("submit after shutdown throws", "[submit][shutdown][exception]") {
+TEST_CASE("submit after shutdown throws", "[submit][shutdown][exception]")
+{
   abin::threadpool pool(2);
   pool.shutdown();  // Explicit shutdown
 
   REQUIRE_THROWS_AS(pool.submit([] { return 42; }), std::runtime_error);
 }
 
-TEST_CASE("shutdown is idempotent", "[shutdown][safe]") {
+TEST_CASE("shutdown is idempotent", "[shutdown][safe]")
+{
   abin::threadpool pool(2);
-  pool.shutdown();  // First shutdown
+  pool.shutdown();                   // First shutdown
   REQUIRE_NOTHROW(pool.shutdown());  // Should not crash or throw again
 }
 
-TEST_CASE("reboot is idempotent when running", "[reboot][idempotent]") {
+TEST_CASE("reboot is idempotent when running", "[reboot][idempotent]")
+{
   abin::threadpool pool(2);
   pool.reboot(4);  // shutdown then restart
   pool.reboot(4);  // should be ignored if already running
   REQUIRE(pool.total_threads() == 4);
 }
 
-TEST_CASE("wait_all after shutdown returns immediately", "[wait_all][post-shutdown]") {
+TEST_CASE("wait_all after shutdown returns immediately", "[wait_all][post-shutdown]")
+{
   abin::threadpool pool(2);
   pool.submit([] { std::this_thread::sleep_for(std::chrono::milliseconds(10)); });
-  pool.shutdown();  // All done
+  pool.shutdown();                   // All done
   REQUIRE_NOTHROW(pool.wait_all());  // Should not hang or crash
 }
 
-TEST_CASE("exception inside task doesn't crash pool", "[exception][submit]") {
+TEST_CASE("exception inside task doesn't crash pool", "[exception][submit]")
+{
   abin::threadpool pool(2);
-  auto fut = pool.submit([]() -> int {
-    throw std::runtime_error("task failed");
-  });
+  auto fut = pool.submit([]() -> int { throw std::runtime_error("task failed"); });
 
   REQUIRE_THROWS_AS(fut.get(), std::runtime_error);
   REQUIRE(pool.is_running());  // Pool should still be alive
 }
 
-TEST_CASE("submit supports void return type", "[submit][void]") {
+TEST_CASE("submit supports void return type", "[submit][void]")
+{
   abin::threadpool pool(2);
   bool flag = false;
 
@@ -571,24 +575,29 @@ TEST_CASE("submit supports void return type", "[submit][void]") {
   REQUIRE(flag);
 }
 
-TEST_CASE("threadpool with 1 thread handles all tasks", "[single-threaded][submit]") {
+TEST_CASE("threadpool with 1 thread handles all tasks", "[single-threaded][submit]")
+{
   abin::threadpool pool(1);  // Single thread mode
   std::vector<std::future<int>> results;
-  for (int i = 0; i < 10; ++i) {
+  for (int i = 0; i < 10; ++i)
+  {
     results.emplace_back(pool.submit([i] { return i * 2; }));
   }
 
-  for (int i = 0; i < 10; ++i) {
+  for (int i = 0; i < 10; ++i)
+  {
     REQUIRE(results[i].get() == i * 2);
   }
 }
 
-TEST_CASE("destructor waits for all tasks", "[destructor][RAII]") {
+TEST_CASE("destructor waits for all tasks", "[destructor][RAII]")
+{
   std::atomic<int> count{0};
 
   {
     abin::threadpool pool(2);
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 5; ++i)
+    {
       pool.submit([&] {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
         ++count;
@@ -599,9 +608,11 @@ TEST_CASE("destructor waits for all tasks", "[destructor][RAII]") {
   REQUIRE(count == 5);
 }
 
-TEST_CASE("invalid thread counts are rejected", "[validate][range]") {
-  REQUIRE_THROWS_AS(abin::threadpool(0), std::invalid_argument);       // zero
-  REQUIRE_THROWS_AS(abin::threadpool(4097), std::invalid_argument);    // too large
+TEST_CASE("invalid thread counts are rejected", "[validate][range]")
+{
+  REQUIRE_THROWS_AS(abin::threadpool(0), std::invalid_argument);                             // zero
+  REQUIRE_THROWS_AS(abin::threadpool(4097), std::invalid_argument);                          // too large
+  REQUIRE_THROWS_AS(abin::threadpool(-1), std::invalid_argument);                            // negative
   REQUIRE_THROWS_AS(abin::threadpool(static_cast<std::size_t>(-5)), std::invalid_argument);  // negative converted
 
   // Valid
