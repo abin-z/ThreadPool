@@ -223,6 +223,29 @@ threadpool::status_info status() const noexcept;  // Summary of status info
 
 ------
 
+## ✅ Recommended Scenarios for Using a Thread Pool
+
+| Scenario                                                     | Reason                                                       |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| Need to execute **a large number of small, independent tasks** | Avoid frequent thread creation/destruction, improve efficiency |
+| Tasks are short-lived                                        | Encourages thread reuse and fast response                    |
+| Tasks are **non-blocking**                                   | Prevents thread pool threads from being tied up              |
+| Want to control concurrency and save resources               | Limit thread count to avoid system overload                  |
+| Background asynchronous task handling                        | E.g., logging, delayed execution, event callbacks            |
+| Need unified thread lifecycle management                     | Easier centralized control, restarting, and destruction      |
+| Using `future`/`promise`-based mechanisms to retrieve results | Thread pool naturally fits task submission with result retrieval |
+
+## ⚠️ Scenarios Where a Thread Pool Is Not Recommended
+
+| Scenario                                                     | Reason                                                       |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| Need a **foreground thread**                                 | Thread pool threads are background by default, process can't rely on them to stay alive |
+| Need to **set thread priority**                              | Thread pool threads typically don't allow custom priority    |
+| **Tasks block for a long time** (e.g., I/O, locks)           | May exhaust the pool, blocking other tasks from starting     |
+| Need to place thread in a **single-threaded apartment (STA)** | Thread pool threads are usually in multi-threaded apartment (MTA) |
+| Need threads with **stable identity or persistent state**    | Thread pool threads are reused, not bound to specific context |
+| Need a thread **dedicated to a long-running task**           | Custom thread is more suitable for holding context and stability |
+
 ## 💡 Contribution Guidelines
 
 🗨️ Welcome to submit **Issue** and **Pull request** to improve this project!
