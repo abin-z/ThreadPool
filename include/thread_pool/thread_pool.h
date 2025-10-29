@@ -38,6 +38,14 @@ namespace abin
 class threadpool
 {
   using task_t = std::function<void()>;  // 定义任务类型为可调用对象
+
+  /// @brief 默认线程数（无法探测硬件并发时使用）
+  static constexpr std::size_t k_fallback_thread_count = 4;
+
+  /// @brief 线程数的取值范围
+  static constexpr std::size_t k_min_thread_count = 1;
+  static constexpr std::size_t k_max_thread_count = 4096;
+
  public:
   /// @brief 线程池当前状态信息结构体
   struct status_info
@@ -199,13 +207,14 @@ class threadpool
   static std::size_t default_thread_count()
   {
     auto n = std::thread::hardware_concurrency();
-    return n == 0 ? 4 : n;
+    return n == 0 ? k_fallback_thread_count : n;
   }
 
   /// @brief 验证线程数是否合法, 1 <= count <= 4096
   static std::size_t validate_thread_count(std::size_t count)
   {
-    if (count < 1 || count > 4096) throw std::invalid_argument("invalid thread_count: must be in range [1, 1024]");
+    if (count < k_min_thread_count || count > k_max_thread_count)
+      throw std::invalid_argument("invalid thread_count: must be in range [1, 4096]");
     return count;
   }
 
