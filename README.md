@@ -30,7 +30,7 @@ The core idea is: **a certain number of threads are pre-created and placed in a 
 
 ### Installation
 
-Copy [`thread_pool.h`](include/thread_pool/thread_pool.h) into your project and include it:
+Copy [`thread_pool.h`](thread_pool/include/thread_pool/thread_pool.h) into your project and include it:
 
 ```cpp
 #include "thread_pool.h"

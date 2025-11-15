@@ -36,7 +36,7 @@
 
 ### 安装使用
 
-拷贝[`thread_pool.h`](include/thread_pool/thread_pool.h)到你的项目目录，然后在代码中引入：
+拷贝[`thread_pool.h`](thread_pool/include/thread_pool/thread_pool.h)到你的项目目录，然后在代码中引入：
 
 ```cpp
 #include "thread_pool.h"
