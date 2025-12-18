@@ -359,11 +359,11 @@ TEST_CASE("Heavy concurrent submissions and value fetching", "[submit][future][s
     });
   }
 
-  for (auto& t : submitters) t.join();
+  for (auto &t : submitters) t.join();
 
   // 获取所有 future 的结果
   std::set<int> results;
-  for (auto& fut : futures)
+  for (auto &fut : futures)
   {
     results.insert(fut.get());
   }
@@ -406,7 +406,7 @@ TEST_CASE("Race between concurrent submissions and shutdown", "[race][shutdown][
   pool.shutdown(threadpool::shutdown_mode::DiscardPendingTasks);  // 启动关闭流程
   shutdown_requested = true;
 
-  for (auto& t : submitters) t.join();
+  for (auto &t : submitters) t.join();
 
   REQUIRE_FALSE(pool.is_running());
   REQUIRE(executed <= submitted);  // 执行数应该不大于提交数

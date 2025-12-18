@@ -24,7 +24,7 @@ struct MyClass
 
 struct Functor
 {
-  void operator()(const std::string& msg) const
+  void operator()(const std::string &msg) const
   {
     std::cout << "Functor called with: " << msg << std::endl;
   }
