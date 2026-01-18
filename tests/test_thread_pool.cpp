@@ -337,6 +337,7 @@ TEST_CASE("Heavy concurrent submissions and value fetching", "[submit][future][s
 
   // 多线程并发提交任务，并收集 future 对象
   std::vector<std::thread> submitters;
+  submitters.reserve(submitter_threads);
   for (int i = 0; i < submitter_threads; ++i)
   {
     submitters.emplace_back([&] {
@@ -381,6 +382,7 @@ TEST_CASE("Race between concurrent submissions and shutdown", "[race][shutdown][
 
   // 启动多个提交线程
   std::vector<std::thread> submitters;
+  submitters.reserve(16);
   for (int i = 0; i < 16; ++i)
   {
     submitters.emplace_back([&] {
@@ -579,6 +581,7 @@ TEST_CASE("threadpool with 1 thread handles all tasks", "[single-threaded][submi
 {
   abin::threadpool pool(1);  // Single thread mode
   std::vector<std::future<int>> results;
+  results.reserve(10);
   for (int i = 0; i < 10; ++i)
   {
     results.emplace_back(pool.submit([i] { return i * 2; }));

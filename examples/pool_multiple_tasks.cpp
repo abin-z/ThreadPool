@@ -8,6 +8,7 @@ int main()
   abin::threadpool pool(30);  // 创建一个包含30个线程的线程池
   std::cout << "===Thread pool created.===\n";
   std::vector<std::future<int>> futures;
+  futures.reserve(100);
   for (int i = 0; i < 100; ++i)
   {
     futures.emplace_back(pool.submit([i] {

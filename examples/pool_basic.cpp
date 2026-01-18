@@ -24,10 +24,10 @@ int main()
   pool.submit(sayhello);  // 无返回值的task, 摒弃submit的返回值
 
   int result = future.get();  // 阻塞直到任务完成
-  std::cout << "Result: " << result << std::endl;
+  std::cout << "Result: " << result << '\n';
 
   double result2 = future2.get();  // 阻塞直到任务完成
-  std::cout << "Result2: " << result2 << std::endl;
+  std::cout << "Result2: " << result2 << '\n';
 
   return 0;
 }

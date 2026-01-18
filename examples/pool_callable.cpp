@@ -7,14 +7,14 @@
 
 void normal_function(int x)
 {
-  std::cout << "normal_function: " << x << std::endl;
+  std::cout << "normal_function: " << x << '\n';
 }
 
 struct MyClass
 {
   void member_function(int y)
   {
-    std::cout << "MyClass::member_function: " << y << std::endl;
+    std::cout << "MyClass::member_function: " << y << '\n';
   }
   int add(int a, int b)
   {
@@ -26,7 +26,7 @@ struct Functor
 {
   void operator()(const std::string &msg) const
   {
-    std::cout << "Functor called with: " << msg << std::endl;
+    std::cout << "Functor called with: " << msg << '\n';
   }
 };
 
