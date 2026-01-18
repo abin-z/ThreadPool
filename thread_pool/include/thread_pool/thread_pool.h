@@ -79,7 +79,7 @@ class threadpool
   }
 
   /// @brief 析构函数, 停止所有线程并等待它们完成
-  ~threadpool()
+  ~threadpool() noexcept
   {
     shutdown(shutdown_mode::WaitForAllTasks);
   }
@@ -204,7 +204,7 @@ class threadpool
 
  private:
   /// @brief 默认线程数, 获取硬件支持的并发线程数, 若无法获取则默认为4
-  static std::size_t default_thread_count()
+  static std::size_t default_thread_count() noexcept
   {
     auto n = std::thread::hardware_concurrency();
     return n == 0 ? k_fallback_thread_count : n;
