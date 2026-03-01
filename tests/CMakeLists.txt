@@ -1,10 +1,3 @@
-# 如果是 MSVC 编译器，设置源文件为 UTF-8 编码
-if (MSVC)
-  add_compile_options("/utf-8")
-endif()
-
-
-# 添加测试可执行文件，将 test_thread_pool.cpp 作为源文件
 add_executable(unit_test test_thread_pool.cpp)
 
 target_compile_options(unit_test PRIVATE
