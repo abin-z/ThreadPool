@@ -30,14 +30,6 @@ target_compile_features(thread_pool INTERFACE cxx_std_11)
 find_package(Threads REQUIRED)
 target_link_libraries(thread_pool INTERFACE Threads::Threads)
 
-# Compiler-specific warning/options
-set(gcc_like_cxx "$<COMPILE_LANG_AND_ID:CXX,ARMClang,AppleClang,Clang,GNU,LCC>")
-set(msvc_cxx "$<COMPILE_LANG_AND_ID:CXX,MSVC>")
-target_compile_options(thread_pool INTERFACE
-  "$<${gcc_like_cxx}:$<BUILD_INTERFACE:-Wall;-Wextra;-Wshadow;-Wformat=2;-Wunused>>"
-  "$<${msvc_cxx}:$<BUILD_INTERFACE:/W3;/utf-8>>"
-)
-
 # ----------------------------------------------------------
 # Detect master (top-level) project
 # ----------------------------------------------------------
@@ -49,12 +41,21 @@ if(NOT DEFINED THREAD_POOL_MASTER_PROJECT)
   endif()
 endif()
 
+# Compiler-specific warning/options
+set(gcc_like_cxx "$<COMPILE_LANG_AND_ID:CXX,ARMClang,AppleClang,Clang,GNU,LCC>")
+set(msvc_cxx "$<COMPILE_LANG_AND_ID:CXX,MSVC>")
+
 if(THREAD_POOL_MASTER_PROJECT)
   message(STATUS "[thread_pool] Master project: ${THREAD_POOL_MASTER_PROJECT}")
   # Generate compile_commands.json for clangd/clang-tidy
   set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
   # Enable PIC for all targets (safest for static libs)
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+  target_compile_options(thread_pool INTERFACE
+    "$<${gcc_like_cxx}:-Wall;-Wextra;-Wshadow;-Wformat=2;-Wunused>"
+    "$<${msvc_cxx}:/W3;/utf-8>"
+  )
 endif()
 
 option(THREAD_POOL_BUILD_EXAMPLES  "Build examples" ${THREAD_POOL_MASTER_PROJECT})
