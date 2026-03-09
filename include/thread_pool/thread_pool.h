@@ -94,7 +94,6 @@ class threadpool
   template <typename F, typename... Args>
   auto submit(F &&f, Args &&...args) -> std::future<decltype(f(args...))>
   {
-    if (!running_) throw std::runtime_error("error: ThreadPool is not running. Cannot submit new tasks.");
     using return_type = decltype(f(args...));
     // 将 f 包装成 task, task 是一个 shared_ptr 指向 packaged_task
     auto task = std::make_shared<std::packaged_task<return_type()>>(
@@ -103,6 +102,7 @@ class threadpool
     std::future<return_type> ret = task->get_future();  // 获取与 task 相关联的 future
     {
       std::lock_guard<std::mutex> lock(mtx_);
+      if (!running_) throw std::runtime_error("error: ThreadPool is not running. Cannot submit new tasks.");
       task_queue_.emplace([task] { (*task)(); });  // 将任务添加到任务队列中
     }
     cv_.notify_one();  // 通知一个等待中的工作线程有新的任务可以执行
