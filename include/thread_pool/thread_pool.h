@@ -183,16 +183,13 @@ class threadpool
   /// @brief 获取线程池的当前状态信息
   status_info status() const noexcept
   {
-    std::size_t total = 0;
-    std::size_t pending = 0;
-    {
-      std::lock_guard<std::mutex> lock(mtx_);
-      total = workers_.size();
-      pending = task_queue_.size();
-    }
+    std::lock_guard<std::mutex> lock(mtx_);
+    std::size_t total = workers_.size();
+    std::size_t pending = task_queue_.size();
     std::size_t busy = busy_count_.load();
     std::size_t idle = total - busy;
-    return {total, busy, idle, pending, running_.load()};
+    bool running = running_.load();
+    return {total, busy, idle, pending, running};
   }
 
   // 禁用拷贝构造函数和拷贝赋值操作符
