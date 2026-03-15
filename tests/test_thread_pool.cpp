@@ -53,7 +53,7 @@ TEST_CASE("ThreadPool task execution time", "[thread_pool]")
   threadpool pool(4);
 
   auto start = steady_clock::now();
-  auto task = pool.submit([]() { std::this_thread::sleep_for(milliseconds(200)); });
+  auto task = pool.submit([]() { std::this_thread::sleep_for(milliseconds(300)); });
 
   task.get();  // 等待任务完成
   auto end = steady_clock::now();
