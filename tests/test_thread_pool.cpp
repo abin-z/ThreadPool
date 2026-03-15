@@ -234,28 +234,28 @@ TEST_CASE("ThreadPool throws if submit after shutdown", "[submit][error]")
   REQUIRE_THROWS_AS(pool.submit([] { return 1; }), std::runtime_error);
 }
 
-// TEST_CASE("ThreadPool discard tasks under high load", "[stress][shutdown][discard]")
-// {
-//   threadpool pool(4);            // 线程池最多有 4 个工作线程
-//   std::atomic<int> executed{0};  // 记录执行过的任务数
+TEST_CASE("ThreadPool discard tasks under high load", "[stress][shutdown][discard]")
+{
+  threadpool pool(4);            // 线程池最多有 4 个工作线程
+  std::atomic<int> executed{0};  // 记录执行过的任务数
 
-//   // 提交 10000 个任务，模拟高负载
-//   for (int i = 0; i < 10000; ++i)
-//   {
-//     pool.submit([&executed] {
-//       std::this_thread::sleep_for(std::chrono::milliseconds(10));  // 模拟任务执行时间
-//       ++executed;
-//     });
-//   }
+  // 提交 10000 个任务，模拟高负载
+  for (int i = 0; i < 10000; ++i)
+  {
+    pool.submit([&executed] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));  // 模拟任务执行时间
+      ++executed;
+    });
+  }
 
-//   std::this_thread::sleep_for(std::chrono::milliseconds(100));  // 等待任务开始执行
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));  // 等待任务开始执行
 
-//   pool.shutdown(threadpool::shutdown_mode::DiscardPendingTasks);  // 放弃未开始的任务
+  pool.shutdown(threadpool::shutdown_mode::DiscardPendingTasks);  // 放弃未开始的任务
 
-//   // 确保线程池已关闭
-//   REQUIRE_FALSE(pool.is_running());  // 线程池应该已经停止
-//   REQUIRE(executed <= 50);           // 只执行了部分任务
-// }
+  // 确保线程池已关闭
+  REQUIRE_FALSE(pool.is_running());  // 线程池应该已经停止
+  REQUIRE(executed <= 50);           // 只执行了部分任务
+}
 
 TEST_CASE("ThreadPool rejects new tasks after shutdown", "[reject][shutdown]")
 {
@@ -464,90 +464,90 @@ TEST_CASE("wait_all waits until all tasks complete", "[wait_all][basic]")
   REQUIRE(counter == 10);
 }
 
-// TEST_CASE("wait_all with recursive submissions", "[wait_all][recursive]")
-// {
-//   abin::threadpool pool(4);
-//   std::atomic<int> depth{0};
+TEST_CASE("wait_all with recursive submissions", "[wait_all][recursive]")
+{
+  abin::threadpool pool(4);
+  std::atomic<int> depth{0};
 
-//   std::function<void(int)> recursive_submit = [&](int level) {
-//     if (level <= 0) return;
-//     pool.submit([&, level] {
-//       depth.fetch_add(1, std::memory_order_relaxed);
-//       recursive_submit(level - 1);
-//     });
-//   };
+  std::function<void(int)> recursive_submit = [&](int level) {
+    if (level <= 0) return;
+    pool.submit([&, level] {
+      depth.fetch_add(1, std::memory_order_relaxed);
+      recursive_submit(level - 1);
+    });
+  };
 
-//   for (int i = 0; i < 5; ++i)
-//   {
-//     recursive_submit(30);  // Recursive depth chains
-//   }
+  for (int i = 0; i < 5; ++i)
+  {
+    recursive_submit(30);  // Recursive depth chains
+  }
 
-//   pool.wait_all();  // Ensure all recursive chains complete
-//   REQUIRE(depth > 0);
-// }
+  pool.wait_all();  // Ensure all recursive chains complete
+  REQUIRE(depth > 0);
+}
 
-// TEST_CASE("wait_all works with packaged_task", "[wait_all][packaged_task]")
-// {
-//   abin::threadpool pool(2);
-//   std::vector<std::future<int>> results;
+TEST_CASE("wait_all works with packaged_task", "[wait_all][packaged_task]")
+{
+  abin::threadpool pool(2);
+  std::vector<std::future<int>> results;
 
-//   for (int i = 0; i < 5; ++i)
-//   {
-//     std::packaged_task<int()> task([i] {
-//       std::this_thread::sleep_for(std::chrono::milliseconds(20));
-//       return i * i;
-//     });
-//     results.push_back(task.get_future());
-//     pool.submit(std::move(task));
-//   }
+  for (int i = 0; i < 5; ++i)
+  {
+    std::packaged_task<int()> task([i] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+      return i * i;
+    });
+    results.push_back(task.get_future());
+    pool.submit(std::move(task));
+  }
 
-//   pool.wait_all();  // Wait for all packaged_tasks
-//   for (int i = 0; i < 5; ++i)
-//   {
-//     REQUIRE(results[i].get() == i * i);
-//   }
-// }
+  pool.wait_all();  // Wait for all packaged_tasks
+  for (int i = 0; i < 5; ++i)
+  {
+    REQUIRE(results[i].get() == i * i);
+  }
+}
 
-// TEST_CASE("wait_all then shutdown is safe", "[wait_all][shutdown]")
-// {
-//   abin::threadpool pool(3);
-//   std::atomic<int> sum{0};
+TEST_CASE("wait_all then shutdown is safe", "[wait_all][shutdown]")
+{
+  abin::threadpool pool(3);
+  std::atomic<int> sum{0};
 
-//   for (int i = 0; i < 6; ++i)
-//   {
-//     pool.submit([&] {
-//       std::this_thread::sleep_for(std::chrono::milliseconds(10));
-//       sum += i;
-//     });
-//   }
+  for (int i = 0; i < 6; ++i)
+  {
+    pool.submit([&] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      sum += i;
+    });
+  }
 
-//   pool.wait_all();   // Ensure all tasks are done
-//   pool.shutdown();   // Shutdown after wait
-//   REQUIRE(sum > 0);  // Validate execution
-// }
+  pool.wait_all();   // Ensure all tasks are done
+  pool.shutdown();   // Shutdown after wait
+  REQUIRE(sum > 0);  // Validate execution
+}
 
-// TEST_CASE("submit after shutdown throws", "[submit][shutdown][exception]")
-// {
-//   abin::threadpool pool(2);
-//   pool.shutdown();  // Explicit shutdown
+TEST_CASE("submit after shutdown throws", "[submit][shutdown][exception]")
+{
+  abin::threadpool pool(2);
+  pool.shutdown();  // Explicit shutdown
 
-//   REQUIRE_THROWS_AS(pool.submit([] { return 42; }), std::runtime_error);
-// }
+  REQUIRE_THROWS_AS(pool.submit([] { return 42; }), std::runtime_error);
+}
 
-// TEST_CASE("shutdown is idempotent", "[shutdown][safe]")
-// {
-//   abin::threadpool pool(2);
-//   pool.shutdown();                   // First shutdown
-//   REQUIRE_NOTHROW(pool.shutdown());  // Should not crash or throw again
-// }
+TEST_CASE("shutdown is idempotent", "[shutdown][safe]")
+{
+  abin::threadpool pool(2);
+  pool.shutdown();                   // First shutdown
+  REQUIRE_NOTHROW(pool.shutdown());  // Should not crash or throw again
+}
 
-// TEST_CASE("reboot is idempotent when running", "[reboot][idempotent]")
-// {
-//   abin::threadpool pool(2);
-//   pool.reboot(4);  // shutdown then restart
-//   pool.reboot(4);  // should be ignored if already running
-//   REQUIRE(pool.total_threads() == 4);
-// }
+TEST_CASE("reboot is idempotent when running", "[reboot][idempotent]")
+{
+  abin::threadpool pool(2);
+  pool.reboot(4);  // shutdown then restart
+  pool.reboot(4);  // should be ignored if already running
+  REQUIRE(pool.total_threads() == 4);
+}
 
 // TEST_CASE("wait_all after shutdown returns immediately", "[wait_all][post-shutdown]")
 // {
