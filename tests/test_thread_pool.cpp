@@ -549,67 +549,67 @@ TEST_CASE("reboot is idempotent when running", "[reboot][idempotent]")
   REQUIRE(pool.total_threads() == 4);
 }
 
-// TEST_CASE("wait_all after shutdown returns immediately", "[wait_all][post-shutdown]")
-// {
-//   abin::threadpool pool(2);
-//   pool.submit([] { std::this_thread::sleep_for(std::chrono::milliseconds(10)); });
-//   pool.shutdown();                   // All done
-//   REQUIRE_NOTHROW(pool.wait_all());  // Should not hang or crash
-// }
+TEST_CASE("wait_all after shutdown returns immediately", "[wait_all][post-shutdown]")
+{
+  abin::threadpool pool(2);
+  pool.submit([] { std::this_thread::sleep_for(std::chrono::milliseconds(10)); });
+  pool.shutdown();                   // All done
+  REQUIRE_NOTHROW(pool.wait_all());  // Should not hang or crash
+}
 
-// TEST_CASE("exception inside task doesn't crash pool", "[exception][submit]")
-// {
-//   abin::threadpool pool(2);
-//   auto fut = pool.submit([]() -> int { throw std::runtime_error("task failed"); });
+TEST_CASE("exception inside task doesn't crash pool", "[exception][submit]")
+{
+  abin::threadpool pool(2);
+  auto fut = pool.submit([]() -> int { throw std::runtime_error("task failed"); });
 
-//   REQUIRE_THROWS_AS(fut.get(), std::runtime_error);
-//   REQUIRE(pool.is_running());  // Pool should still be alive
-// }
+  REQUIRE_THROWS_AS(fut.get(), std::runtime_error);
+  REQUIRE(pool.is_running());  // Pool should still be alive
+}
 
-// TEST_CASE("submit supports void return type", "[submit][void]")
-// {
-//   abin::threadpool pool(2);
-//   bool flag = false;
+TEST_CASE("submit supports void return type", "[submit][void]")
+{
+  abin::threadpool pool(2);
+  bool flag = false;
 
-//   auto fut = pool.submit([&] { flag = true; });
-//   fut.get();  // Should not throw
+  auto fut = pool.submit([&] { flag = true; });
+  fut.get();  // Should not throw
 
-//   REQUIRE(flag);
-// }
+  REQUIRE(flag);
+}
 
-// TEST_CASE("threadpool with 1 thread handles all tasks", "[single-threaded][submit]")
-// {
-//   abin::threadpool pool(1);  // Single thread mode
-//   std::vector<std::future<int>> results;
-//   results.reserve(10);
-//   for (int i = 0; i < 10; ++i)
-//   {
-//     results.emplace_back(pool.submit([i] { return i * 2; }));
-//   }
+TEST_CASE("threadpool with 1 thread handles all tasks", "[single-threaded][submit]")
+{
+  abin::threadpool pool(1);  // Single thread mode
+  std::vector<std::future<int>> results;
+  results.reserve(10);
+  for (int i = 0; i < 10; ++i)
+  {
+    results.emplace_back(pool.submit([i] { return i * 2; }));
+  }
 
-//   for (int i = 0; i < 10; ++i)
-//   {
-//     REQUIRE(results[i].get() == i * 2);
-//   }
-// }
+  for (int i = 0; i < 10; ++i)
+  {
+    REQUIRE(results[i].get() == i * 2);
+  }
+}
 
-// TEST_CASE("destructor waits for all tasks", "[destructor][RAII]")
-// {
-//   std::atomic<int> count{0};
+TEST_CASE("destructor waits for all tasks", "[destructor][RAII]")
+{
+  std::atomic<int> count{0};
 
-//   {
-//     abin::threadpool pool(2);
-//     for (int i = 0; i < 5; ++i)
-//     {
-//       pool.submit([&] {
-//         std::this_thread::sleep_for(std::chrono::milliseconds(10));
-//         ++count;
-//       });
-//     }
-//   }  // RAII scope ends, destructor calls wait_all + shutdown
+  {
+    abin::threadpool pool(2);
+    for (int i = 0; i < 5; ++i)
+    {
+      pool.submit([&] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        ++count;
+      });
+    }
+  }  // RAII scope ends, destructor calls wait_all + shutdown
 
-//   REQUIRE(count == 5);
-// }
+  REQUIRE(count == 5);
+}
 
 // TEST_CASE("invalid thread counts are rejected", "[validate][range]")
 // {
