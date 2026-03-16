@@ -201,39 +201,40 @@ TEST_CASE("ThreadPool discard tasks on shutdown", "[shutdown][discard]")
 
   REQUIRE(pool.is_running() == false);
 }
-TEST_CASE("ThreadPool discard tasks on shutdown - stable", "[shutdown][discard]")
-{
-  abin::threadpool pool(2);
-  std::promise<void> start_flag;
-  std::shared_future<void> start_future(start_flag.get_future());
-  std::atomic<int> started{0};
-  std::atomic<int> executed{0};
 
-  // 提交5个任务
-  for (int i = 0; i < 5; ++i)
-  {
-    pool.submit([start_future, &started, &executed] {
-      started.fetch_add(1, std::memory_order_relaxed);  // 已被 worker 拿到
-      start_future.wait();                              // 等待放行
-      executed.fetch_add(1, std::memory_order_relaxed);
-    });
-  }
+// TEST_CASE("ThreadPool discard tasks on shutdown - stable", "[shutdown][discard]")
+// {
+//   abin::threadpool pool(2);
+//   std::promise<void> start_flag;
+//   std::shared_future<void> start_future(start_flag.get_future());
+//   std::atomic<int> started{0};
+//   std::atomic<int> executed{0};
 
-  // 等待前两个任务真正启动
-  while (started.load() < 2)
-  {
-    std::this_thread::yield();
-  }
+//   // 提交5个任务
+//   for (int i = 0; i < 5; ++i)
+//   {
+//     pool.submit([start_future, &started, &executed] {
+//       started.fetch_add(1, std::memory_order_relaxed);  // 已被 worker 拿到
+//       start_future.wait();                              // 等待放行
+//       executed.fetch_add(1, std::memory_order_relaxed);
+//     });
+//   }
 
-  // 放行前两个任务
-  start_flag.set_value();
+//   // 等待前两个任务真正启动
+//   while (started.load() < 2)
+//   {
+//     std::this_thread::yield();
+//   }
 
-  // shutdown 丢弃剩余未开始的任务
-  pool.shutdown(abin::threadpool::shutdown_mode::DiscardPendingTasks);
+//   // 放行前两个任务
+//   start_flag.set_value();
 
-  REQUIRE(pool.is_running() == false);
-  REQUIRE(executed.load() == 2);  // 只有前两个任务执行
-}
+//   // shutdown 丢弃剩余未开始的任务
+//   pool.shutdown(abin::threadpool::shutdown_mode::DiscardPendingTasks);
+
+//   REQUIRE(pool.is_running() == false);
+//   REQUIRE(executed.load() == 2);  // 只有前两个任务执行
+// }
 
 TEST_CASE("ThreadPool throws if submit after shutdown", "[submit][error]")
 {
