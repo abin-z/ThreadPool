@@ -44,7 +44,7 @@ class threadpool
 
   /// @brief 线程数的取值范围
   static constexpr std::size_t k_min_thread_count = 1;
-  static constexpr std::size_t k_max_thread_count = 4096;
+  static constexpr std::size_t k_max_thread_count = 1024;
 
  public:
   /// @brief 线程池当前状态信息结构体
