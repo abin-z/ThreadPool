@@ -632,6 +632,15 @@ TEST_CASE("invalid thread counts are rejected", "[validate][range]")
   REQUIRE_NOTHROW(abin::threadpool(1));
   REQUIRE_NOTHROW(abin::threadpool(8));
   REQUIRE_NOTHROW(abin::threadpool(1024));  // 634行
+  REQUIRE_NOTHROW(abin::threadpool(1024));  // 635行
+  REQUIRE_NOTHROW(abin::threadpool(1024));  // 636行
+  REQUIRE_NOTHROW(abin::threadpool(1024));
+  REQUIRE_NOTHROW(abin::threadpool(1024));
+  REQUIRE_NOTHROW(abin::threadpool(1024));
+  REQUIRE_NOTHROW(abin::threadpool(1024));
+  REQUIRE_NOTHROW(abin::threadpool(1024));
+  REQUIRE_NOTHROW(abin::threadpool(1024));
+  REQUIRE_NOTHROW(abin::threadpool(1024));
   // REQUIRE_NOTHROW(abin::threadpool(2048));
   // REQUIRE_NOTHROW(abin::threadpool(4096));
 }
