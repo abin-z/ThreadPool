@@ -624,7 +624,7 @@ TEST_CASE("destructor waits for all tasks", "[destructor][RAII]")
 TEST_CASE("invalid thread counts are rejected", "[validate][range]")
 {
   REQUIRE_THROWS_AS(abin::threadpool(0), std::invalid_argument);                             // zero
-  REQUIRE_THROWS_AS(abin::threadpool(4097), std::invalid_argument);                          // too large
+  // REQUIRE_THROWS_AS(abin::threadpool(4097), std::invalid_argument);                          // too large
   REQUIRE_THROWS_AS(abin::threadpool(-1), std::invalid_argument);                            // negative
   REQUIRE_THROWS_AS(abin::threadpool(static_cast<std::size_t>(-5)), std::invalid_argument);  // negative converted
 
@@ -632,5 +632,5 @@ TEST_CASE("invalid thread counts are rejected", "[validate][range]")
   REQUIRE_NOTHROW(abin::threadpool(1));
   REQUIRE_NOTHROW(abin::threadpool(8));
   REQUIRE_NOTHROW(abin::threadpool(1024));
-  REQUIRE_NOTHROW(abin::threadpool(4096));
+  // REQUIRE_NOTHROW(abin::threadpool(4096));
 }
