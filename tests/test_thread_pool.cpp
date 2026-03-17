@@ -15,7 +15,7 @@ TEST_CASE("ThreadPool creation and destruction", "[thread_pool]")
 {
   threadpool pool(4);  // 创建一个包含4个线程的线程池
   REQUIRE_NOTHROW(
-    pool.submit([]() { std::this_thread::sleep_for(milliseconds(100)); }));  // 提交一个任务，应该不会抛出异常
+    pool.submit([]() { std::this_thread::sleep_for(milliseconds(100)); }));  // 提交一个任务, 应该不会抛出异常
 }
 
 // 测试线程池任务提交功能
@@ -27,7 +27,7 @@ TEST_CASE("ThreadPool submit tasks", "[thread_pool]")
   auto task = pool.submit([&]() { counter++; });
 
   task.get();             // 等待任务完成
-  REQUIRE(counter == 1);  // 确保任务执行成功，counter 应该是1
+  REQUIRE(counter == 1);  // 确保任务执行成功, counter 应该是1
 }
 
 // 测试线程池并发执行任务
@@ -124,7 +124,7 @@ TEST_CASE("ThreadPool blocks on empty task queue", "[thread_pool]")
     task_started = true;
   });
 
-  // 检查任务是否启动前，其他任务还没加入线程池
+  // 检查任务是否启动前, 其他任务还没加入线程池
   std::this_thread::sleep_for(milliseconds(50));  // 等待一会
   REQUIRE(task_started == false);                 // 确保任务没有立即执行
 
@@ -196,45 +196,61 @@ TEST_CASE("ThreadPool discard tasks on shutdown", "[shutdown][discard]")
     pool.submit([start_future] { start_future.wait(); });
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
-  start_flag.set_value();  // 先触发所有正在执行的任务，不让它们挂住
+  start_flag.set_value();  // 先触发所有正在执行的任务, 不让它们挂住
   pool.shutdown(threadpool::shutdown_mode::DiscardPendingTasks);
 
   REQUIRE(pool.is_running() == false);
 }
 
-// TEST_CASE("ThreadPool discard tasks on shutdown - stable", "[shutdown][discard]")
-// {
-//   abin::threadpool pool(2);
-//   std::promise<void> start_flag;
-//   std::shared_future<void> start_future(start_flag.get_future());
-//   std::atomic<int> started{0};
-//   std::atomic<int> executed{0};
+TEST_CASE("ThreadPool discard tasks on shutdown - stable", "[shutdown][discard]")
+{
+  abin::threadpool pool(2);
 
-//   // 提交5个任务
-//   for (int i = 0; i < 5; ++i)
-//   {
-//     pool.submit([start_future, &started, &executed] {
-//       started.fetch_add(1, std::memory_order_relaxed);  // 已被 worker 拿到
-//       start_future.wait();                              // 等待放行
-//       executed.fetch_add(1, std::memory_order_relaxed);
-//     });
-//   }
+  std::promise<void> gate;
+  std::shared_future<void> gate_future(gate.get_future());
 
-//   // 等待前两个任务真正启动
-//   while (started.load() < 2)
-//   {
-//     std::this_thread::yield();
-//   }
+  std::atomic<int> taken{0};     // 已被 worker 线程取走(开始执行)的任务数
+  std::atomic<int> executed{0};  // 实际执行完成的任务数
 
-//   // 放行前两个任务
-//   start_flag.set_value();
+  // 提交 5 个任务
+  for (int i = 0; i < 5; ++i)
+  {
+    pool.submit([&] {
+      taken.fetch_add(1, std::memory_order_relaxed);                 // 标记: 该任务已被 worker 取走
+      gate_future.wait();                                            // 阻塞在这里, 用于人为控制执行时机
+      std::this_thread::sleep_for(std::chrono::milliseconds(1000));  // 模拟任务执行时间
+      executed.fetch_add(1, std::memory_order_relaxed);
+    });
+  }
 
-//   // shutdown 丢弃剩余未开始的任务
-//   pool.shutdown(abin::threadpool::shutdown_mode::DiscardPendingTasks);
+  // 等待两个 worker 都“拿到任务”
+  // 此时可以保证:
+  //   - 恰好有 2 个任务已被取走(正在执行, 但被 gate 卡住)
+  //   - 剩余任务仍在队列中(尚未开始执行)
+  // 等待所有 worker 线程各自取到一个任务。
+  // 由于线程池大小为 2, 且任务在一开始就阻塞(gate),
+  // 一旦 taken == 2, 说明两个 worker 已全部被占用,
+  // 不会再有线程继续从队列中取任务。
+  while (taken.load(std::memory_order_relaxed) < 2)
+  {
+    std::this_thread::yield();  // 让出 CPU, 避免忙等占满资源(yield的是当前线程, 等待其他线程执行)
+  }
 
-//   REQUIRE(pool.is_running() == false);
-//   REQUIRE(executed.load() == 2);  // 只有前两个任务执行
-// }
+  // ⚠️ 关键状态(测试成立的前提):
+  //   ✔ 2 个任务已被 worker 取走(不会被 discard)
+  //   ✔ 剩余任务仍在队列中(可以被 discard)
+
+  // 放行正在执行的任务, 使其继续执行并最终完成
+  gate.set_value();
+
+  // 关闭线程池(丢弃未开始的任务):
+  //   - 队列中的任务应被清空(不执行)
+  //   - 已经被 worker 取走的任务应继续执行直至完成
+  pool.shutdown(abin::threadpool::shutdown_mode::DiscardPendingTasks);
+
+  REQUIRE(pool.is_running() == false);
+  REQUIRE(executed.load() == 2);
+}
 
 TEST_CASE("ThreadPool throws if submit after shutdown", "[submit][error]")
 {
@@ -249,7 +265,7 @@ TEST_CASE("ThreadPool discard tasks under high load", "[stress][shutdown][discar
   threadpool pool(4);            // 线程池最多有 4 个工作线程
   std::atomic<int> executed{0};  // 记录执行过的任务数
 
-  // 提交 10000 个任务，模拟高负载
+  // 提交 10000 个任务, 模拟高负载
   for (int i = 0; i < 10000; ++i)
   {
     pool.submit([&executed] {
@@ -345,7 +361,7 @@ TEST_CASE("Heavy concurrent submissions and value fetching", "[submit][future][s
   std::vector<std::future<int>> futures;
   std::mutex futures_mutex;
 
-  // 多线程并发提交任务，并收集 future 对象
+  // 多线程并发提交任务, 并收集 future 对象
   std::vector<std::thread> submitters;
   submitters.reserve(submitter_threads);
   for (int i = 0; i < submitter_threads; ++i)
@@ -408,7 +424,7 @@ TEST_CASE("Race between concurrent submissions and shutdown", "[race][shutdown][
         }
         catch (...)
         {
-          // 提交失败（线程池已关闭）时跳过
+          // 提交失败(线程池已关闭)时跳过
         }
       }
     });
@@ -645,6 +661,6 @@ TEST_CASE("invalid thread counts are rejected", "[validate][range]")
   // REQUIRE_NOTHROW(abin::threadpool(1536));
   // REQUIRE_NOTHROW(abin::threadpool(1792));
   // REQUIRE_NOTHROW(abin::threadpool(1920)); // 1920 偶尔能通过
-  // REQUIRE_NOTHROW(abin::threadpool(2048)); // 数量级过大，可能会导致系统资源耗尽，测试环境不稳定(macos测试不通过)
+  // REQUIRE_NOTHROW(abin::threadpool(2048)); // 数量级过大, 可能会导致系统资源耗尽, 测试环境不稳定(macos测试不通过)
   // REQUIRE_NOTHROW(abin::threadpool(4096));
 }
