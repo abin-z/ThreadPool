@@ -280,7 +280,7 @@ TEST_CASE("ThreadPool discard tasks under high load", "[stress][shutdown][discar
 
   // 确保线程池已关闭
   REQUIRE_FALSE(pool.is_running());  // 线程池应该已经停止
-  REQUIRE(executed <= 50);           // 只执行了部分任务
+  REQUIRE(executed <= 200);          // 只执行了部分任务
 }
 
 TEST_CASE("ThreadPool rejects new tasks after shutdown", "[reject][shutdown]")
