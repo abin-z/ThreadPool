@@ -16,7 +16,7 @@
 
 ![Thread_pool.svg](assets/Thread_pool.svg.png)
 
-------
+`⭐ 喜欢这个项目的话，别忘了点个Star哦！`
 
 ## 🚀特性亮点
 

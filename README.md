@@ -14,6 +14,8 @@ The core idea is: **a certain number of threads are pre-created and placed in a 
 
 ![Thread_pool.svg](assets/Thread_pool.svg.png)
 
+`⭐ Don't forget to put a star if you like the project!`
+
 ## ✨ Features
 
 - **Flexible Task Submission**: Supports arbitrary callable types with arguments; returns a `std::future<T>`
