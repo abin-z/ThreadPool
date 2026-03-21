@@ -207,11 +207,11 @@ class threadpool
     return n == 0 ? k_fallback_thread_count : n;
   }
 
-  /// @brief 验证线程数是否合法, 1 <= count <= 4096
+  /// @brief 验证线程数是否合法, 1 <= count <= 1024
   static std::size_t validate_thread_count(std::size_t count)
   {
     if (count < k_min_thread_count || count > k_max_thread_count)
-      throw std::invalid_argument("invalid thread_count: must be in range [1, 4096]");
+      throw std::invalid_argument("invalid thread_count: must be in range [1, 1024]");
     return count;
   }
 
