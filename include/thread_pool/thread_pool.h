@@ -122,6 +122,19 @@ class threadpool
   /// 抛弃尚未开始的任务.
   void shutdown(shutdown_mode mode = shutdown_mode::WaitForAllTasks)
   {
+    // 防止在 worker 线程中调用（避免 self-join）
+    if (running_)
+    {
+      const auto self_id = std::this_thread::get_id();
+      for (const auto &worker : workers_)
+      {
+        if (worker.get_id() == self_id)
+        {
+          throw std::logic_error("threadpool::shutdown() cannot be called from a worker thread");
+        }
+      }
+    }
+
     {
       std::lock_guard<std::mutex> lock(mtx_);
       if (!running_) return;  // 已经关闭则直接返回

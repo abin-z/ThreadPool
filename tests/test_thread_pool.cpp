@@ -637,6 +637,44 @@ TEST_CASE("destructor waits for all tasks", "[destructor][RAII]")
   REQUIRE(count == 5);
 }
 
+TEST_CASE("shutdown called from worker thread throws", "[shutdown][misuse]")
+{
+  abin::threadpool pool(2);
+
+  std::atomic<bool> caught{false};
+
+  auto fut = pool.submit([&] {
+    try
+    {
+      pool.shutdown();  // 错误: 非法调用
+    }
+    catch (const std::logic_error &)
+    {
+      caught = true;
+    }
+  });
+
+  fut.get();  // 等待任务执行完
+
+  REQUIRE(caught == true);
+}
+
+TEST_CASE("destructor does not terminate on internal shutdown", "[destructor][safety]")
+{
+  std::atomic<bool> executed{false};
+
+  {
+    abin::threadpool pool(1);
+
+    pool.submit([&] {
+      executed = true;
+      // 不要调用 shutdown，这里只是验证析构安全
+    });
+  }
+
+  REQUIRE(executed == true);
+}
+
 TEST_CASE("invalid thread counts are rejected", "[validate][range]")
 {
   REQUIRE_THROWS_AS(abin::threadpool(0), std::invalid_argument);                             // zero
