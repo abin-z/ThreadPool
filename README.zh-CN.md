@@ -1,6 +1,12 @@
 # 跨平台轻量级线程池(C++11)
 
-[![iniparser](https://img.shields.io/badge/Thread_Pool-8A2BE2)](https://github.com/abin-z/ThreadPool) [![headeronly](https://img.shields.io/badge/Header_Only-green)](include/thread_pool/thread_pool.h) [![moderncpp](https://img.shields.io/badge/Modern_C%2B%2B-218c73)](https://learn.microsoft.com/en-us/cpp/cpp/welcome-back-to-cpp-modern-cpp?view=msvc-170) [![licenseMIT](https://img.shields.io/badge/License-MIT-green)](https://opensource.org/license/MIT) [![version](https://img.shields.io/badge/version-0.9.2-green)](https://github.com/abin-z/ThreadPool/releases)
+[![iniparser](https://img.shields.io/badge/Thread_Pool-8A2BE2)](https://github.com/abin-z/ThreadPool)
+[![headeronly](https://img.shields.io/badge/Header_Only-green)](include/thread_pool/thread_pool.h)
+[![moderncpp](https://img.shields.io/badge/Modern_C%2B%2B-218c73)](https://learn.microsoft.com/en-us/cpp/cpp/welcome-back-to-cpp-modern-cpp?view=msvc-170)
+[![cpp](https://img.shields.io/badge/Compatibility-C++11-darkgreen.svg)](https://isocpp.org)
+[![licenseMIT](https://img.shields.io/badge/License-MIT-green)](https://opensource.org/license/MIT)
+[![version](https://img.shields.io/badge/version-0.9.2-green)](https://github.com/abin-z/ThreadPool/releases)
+[![ci](https://github.com/abin-z/ThreadPool/actions/workflows/cmake_unix.yml/badge.svg)](https://github.com/abin-z/ThreadPool/actions/workflows/cmake_unix.yml)
 
 🌍 Languages/语言:  [English](README.md)  |  [简体中文](README.zh-CN.md)
 
