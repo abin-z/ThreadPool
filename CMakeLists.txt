@@ -69,7 +69,9 @@ endif()
 if(THREAD_POOL_BUILD_TESTS)
   message(STATUS "[thread_pool] Building tests...")
   include(CTest)  # enable add_test
-  add_subdirectory(external)
+  if(NOT TARGET Catch2::Catch2)
+    add_subdirectory(external)
+  endif()
   add_subdirectory(tests)
 endif()
 
